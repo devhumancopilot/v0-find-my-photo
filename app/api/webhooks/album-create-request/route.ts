@@ -17,14 +17,22 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { description } = body
+    const { query, image } = body
+
+    // Validate input - must have either query or image
+    if (!query && !image) {
+      return NextResponse.json(
+        { error: "Either 'query' (text) or 'image' (base64) must be provided" },
+        { status: 400 }
+      )
+    }
 
     // Create album request record
     const { data: albumRequest, error: requestError } = await supabase
       .from("album_requests")
       .insert({
         user_id: user.id,
-        user_description: description,
+        user_description: query || "Image-based search",
         processing_status: "pending",
       })
       .select()
@@ -35,21 +43,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to create album request" }, { status: 500 })
     }
 
-    // Trigger n8n webhook for AI processing
-    const webhookResult = await triggerWebhook(process.env.N8N_WEBHOOK_ALBUM_CREATE_REQUEST, {
+    // Prepare n8n webhook payload for Find Photos (Semantic Search)
+    const n8nPayload: {
+      userId: string
+      requestId: number
+      timestamp: string
+      query?: string
+      image?: string
+    } = {
       userId: user.id,
       requestId: albumRequest.id,
-      description,
       timestamp: new Date().toISOString(),
-    })
+    }
+
+    // Add query or image based on what was provided
+    if (query) {
+      n8nPayload.query = query
+    }
+    if (image) {
+      n8nPayload.image = image
+    }
+
+    // Trigger n8n webhook for semantic search
+    const webhookResult = await triggerWebhook(process.env.N8N_WEBHOOK_FIND_PHOTOS, n8nPayload)
 
     return NextResponse.json({
       success: true,
       requestId: albumRequest.id,
       webhookTriggered: webhookResult.success,
+      searchType: query ? "text" : "image",
     })
   } catch (error) {
-    console.error("[v0] Album create request webhook error:", error)
+    console.error("[v0] Find photos webhook error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

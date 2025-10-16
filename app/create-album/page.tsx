@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Sparkles, ArrowLeft, ArrowRight, Loader2, ImageIcon, Calendar, Check, X, Upload, Trash2 } from "lucide-react"
+import { Sparkles, ArrowLeft, ArrowRight, Loader2, ImageIcon, Calendar, Check, X, Upload } from "lucide-react"
 
 type Step = 1 | 2 | 3
 
@@ -28,95 +28,48 @@ const suggestedPhotos = [
   { id: 9, url: "/beach-picnic-setup.jpg", selected: true },
 ]
 
-interface UploadedImage {
-  id: string
-  file: File
-  preview: string
-}
-
 export default function CreateAlbumPage() {
   const [currentStep, setCurrentStep] = useState<Step>(1)
   const [isProcessing, setIsProcessing] = useState(false)
   const [albumTitle, setAlbumTitle] = useState("")
   const [albumDescription, setAlbumDescription] = useState("")
   const [selectedPhotos, setSelectedPhotos] = useState<number[]>([1, 2, 3, 5, 7, 9])
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([])
-  const [isUploading, setIsUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
-
-    const newImages: UploadedImage[] = Array.from(files).map((file) => ({
-      id: Math.random().toString(36).substring(7),
-      file,
-      preview: URL.createObjectURL(file),
-    }))
-
-    setUploadedImages((prev) => [...prev, ...newImages])
-  }
-
-  const handleRemoveImage = (id: string) => {
-    setUploadedImages((prev) => {
-      const image = prev.find((img) => img.id === id)
-      if (image) {
-        URL.revokeObjectURL(image.preview)
-      }
-      return prev.filter((img) => img.id !== id)
-    })
-  }
-
-  const handleUploadImages = async () => {
-    if (uploadedImages.length === 0) return
-
-    setIsUploading(true)
-    try {
-      const formData = new FormData()
-      uploadedImages.forEach((img) => {
-        formData.append("files", img.file)
-      })
-      formData.append("albumTitle", albumTitle)
-      formData.append("albumDescription", albumDescription)
-
-      const response = await fetch("/api/webhooks/photos-uploaded", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to upload images")
-      }
-
-      const data = await response.json()
-      console.log("[v0] Images uploaded successfully:", data)
-
-      // Clear uploaded images after successful upload
-      uploadedImages.forEach((img) => URL.revokeObjectURL(img.preview))
-      setUploadedImages([])
-    } catch (error) {
-      console.error("[v0] Upload error:", error)
-      alert("Failed to upload images. Please try again.")
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
   const handleNext = async () => {
     if (currentStep === 1) {
-      if (uploadedImages.length > 0) {
-        await handleUploadImages()
-      }
-
-      // Simulate AI processing
+      // Trigger AI semantic search via album-create-request API
       setIsProcessing(true)
-      setTimeout(() => {
+      try {
+        const response = await fetch("/api/webhooks/album-create-request", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: albumDescription,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to create album request")
+        }
+
+        const data = await response.json()
+        console.log("[v0] Album request created:", data)
+
+        // Simulate AI processing time for better UX
+        setTimeout(() => {
+          setIsProcessing(false)
+          setCurrentStep(2)
+        }, 2000)
+      } catch (error) {
+        console.error("[v0] Album request error:", error)
+        alert("Failed to process request. Please try again.")
         setIsProcessing(false)
-        setCurrentStep(2)
-      }, 2000)
+      }
     } else if (currentStep < 3) {
       setCurrentStep((prev) => (prev + 1) as Step)
     } else {
@@ -227,77 +180,6 @@ export default function CreateAlbumPage() {
                   </div>
                 </div>
 
-                <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-foreground">Or Upload Your Own Photos</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Upload images to build your knowledge base for semantic search
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      Choose Files
-                    </Button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                  </div>
-
-                  {uploadedImages.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-foreground">
-                          {uploadedImages.length} image{uploadedImages.length > 1 ? "s" : ""} ready to upload
-                        </p>
-                        {!isUploading && (
-                          <Button size="sm" onClick={handleUploadImages} disabled={isUploading}>
-                            {isUploading ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Uploading...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="mr-2 h-4 w-4" />
-                                Upload Now
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                        {uploadedImages.map((img) => (
-                          <div key={img.id} className="group relative aspect-square overflow-hidden rounded-lg border">
-                            <img
-                              src={img.preview || "/placeholder.svg"}
-                              alt={img.file.name}
-                              className="h-full w-full object-cover"
-                            />
-                            <button
-                              onClick={() => handleRemoveImage(img.id)}
-                              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
                 <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-3">
                   <Button variant="outline" className="flex-1 w-full bg-transparent" asChild>
                     <Link href="/dashboard" className="flex w-full items-center justify-center">
@@ -307,7 +189,7 @@ export default function CreateAlbumPage() {
                   </Button>
                   <Button
                     onClick={handleNext}
-                    disabled={!canProceed || isProcessing || isUploading}
+                    disabled={!canProceed || isProcessing}
                     className="flex-1 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
                   >
                     {isProcessing ? (
