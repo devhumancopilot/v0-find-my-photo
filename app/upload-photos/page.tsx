@@ -51,7 +51,7 @@ export default function UploadPhotosPage() {
     })
 
     try {
-      const response = await fetch("/api/photos/upload", {
+      const response = await fetch("/api/webhooks/photos-upload", {
         method: "POST",
         body: formData,
       })

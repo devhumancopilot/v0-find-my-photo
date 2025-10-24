@@ -12,8 +12,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, LogOut, User, FolderOpen, Upload } from "lucide-react"
+import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, User, FolderOpen, Upload } from "lucide-react"
 import { PhotoGallery } from "@/components/photo-gallery"
+import { LogoutButton } from "@/components/logout-button"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -28,12 +29,39 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
 
-  const { data: albums } = await supabase
+  // Fetch albums with resolved cover images
+  const { data: rawAlbums } = await supabase
     .from("albums")
     .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(6)
+
+  // Resolve photo IDs to actual URLs for each album
+  const albums = await Promise.all(
+    (rawAlbums || []).map(async (album) => {
+      // Get cover image URL by resolving the photo ID
+      let coverImageUrl = "/placeholder.svg"
+      if (album.cover_image_url) {
+        const { data: coverPhoto } = await supabase
+          .from("photos")
+          .select("file_url")
+          .eq("id", parseInt(album.cover_image_url))
+          .single()
+
+        coverImageUrl = coverPhoto?.file_url || "/placeholder.svg"
+      }
+
+      // Calculate actual photo count from photos array
+      const actualPhotoCount = album.photos ? album.photos.length : 0
+
+      return {
+        ...album,
+        cover_image_url: coverImageUrl,
+        photo_count: actualPhotoCount,
+      }
+    })
+  )
 
   // Fetch all photos from the photos table
   const { data: photos, error: photosError } = await supabase
@@ -106,10 +134,7 @@ export default async function DashboardPage() {
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Log out
-                </DropdownMenuItem>
+                <LogoutButton />
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -195,18 +220,20 @@ export default async function DashboardPage() {
                   <div className="relative aspect-[4/3] overflow-hidden">
                     <img
                       src={album.cover_image_url || "/placeholder.svg"}
-                      alt={album.title}
+                      alt={album.album_title}
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                     <div className="absolute bottom-4 left-4 right-4 translate-y-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-                      <Button size="sm" className="w-full bg-white text-foreground hover:bg-white/90">
-                        View Album
-                      </Button>
+                      <Link href={`/albums/${album.id}`}>
+                        <Button size="sm" className="w-full bg-white text-foreground hover:bg-white/90">
+                          View Album
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                   <CardHeader>
-                    <CardTitle className="text-lg">{album.title}</CardTitle>
+                    <CardTitle className="text-lg">{album.album_title}</CardTitle>
                     <CardDescription className="flex items-center gap-4 text-sm">
                       <span className="flex items-center gap-1">
                         <ImageIcon className="h-4 w-4" />

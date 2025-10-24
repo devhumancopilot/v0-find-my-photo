@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { query, image } = body
+    const { query, image, albumTitle } = body
 
     // Validate input - must have either query or image
     if (!query && !image) {
@@ -27,51 +27,42 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create album request record
-    const { data: albumRequest, error: requestError } = await supabase
-      .from("album_requests")
-      .insert({
-        user_id: user.id,
-        user_description: query || "Image-based search",
-        processing_status: "pending",
-      })
-      .select()
-      .single()
-
-    if (requestError) {
-      console.error("[v0] Album request creation failed:", requestError)
-      return NextResponse.json({ error: "Failed to create album request" }, { status: 500 })
-    }
-
     // Prepare n8n webhook payload for Find Photos (Semantic Search)
-    const n8nPayload: {
-      userId: string
-      requestId: number
-      timestamp: string
-      query?: string
-      image?: string
-    } = {
-      userId: user.id,
-      requestId: albumRequest.id,
+    // n8n will handle ALL database operations
+    const n8nPayload = {
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      albumTitle: albumTitle,
+      query: query || null,
+      image: image || null,
       timestamp: new Date().toISOString(),
     }
 
-    // Add query or image based on what was provided
-    if (query) {
-      n8nPayload.query = query
-    }
-    if (image) {
-      n8nPayload.image = image
-    }
+    console.log("[v0] Triggering find photos webhook:", {
+      userId: user.id,
+      albumTitle,
+      searchType: query ? "text" : "image",
+    })
 
     // Trigger n8n webhook for semantic search
     const webhookResult = await triggerWebhook(process.env.N8N_WEBHOOK_FIND_PHOTOS, n8nPayload)
 
+    if (!webhookResult.success) {
+      console.error("[v0] n8n webhook failed:", webhookResult.error)
+      return NextResponse.json(
+        { error: "Failed to find photos. Please try again." },
+        { status: 500 }
+      )
+    }
+
+    // Return the photo results from n8n
     return NextResponse.json({
       success: true,
-      requestId: albumRequest.id,
-      webhookTriggered: webhookResult.success,
+      webhookTriggered: true,
       searchType: query ? "text" : "image",
+      photos: webhookResult.data || [],
     })
   } catch (error) {
     console.error("[v0] Find photos webhook error:", error)

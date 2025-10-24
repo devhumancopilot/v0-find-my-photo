@@ -17,56 +17,51 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, description, selectedPhotos, coverImageUrl } = body
+    const { albumTitle, photoIds, description, coverPhotoId } = body
 
-    // Create album
-    const { data: album, error: albumError } = await supabase
-      .from("albums")
-      .insert({
-        user_id: user.id,
-        title,
-        description,
-        cover_image_url: coverImageUrl,
-        photo_count: selectedPhotos.length,
-        status: "active",
-      })
-      .select()
-      .single()
-
-    if (albumError) {
-      console.error("[v0] Album creation failed:", albumError)
-      return NextResponse.json({ error: "Failed to create album" }, { status: 500 })
+    // Validate input
+    if (!albumTitle || !photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+      return NextResponse.json(
+        { error: "albumTitle and photoIds (non-empty array) are required" },
+        { status: 400 }
+      )
     }
 
-    // Create photo records
-    const photoRecords = selectedPhotos.map((photo: { url: string; caption?: string }, index: number) => ({
-      album_id: album.id,
-      user_id: user.id,
-      image_url: photo.url,
-      caption: photo.caption || null,
-      position: index,
-    }))
-
-    const { error: photosError } = await supabase.from("photos").insert(photoRecords)
-
-    if (photosError) {
-      console.error("[v0] Photos creation failed:", photosError)
-      // Don't fail the request, album is already created
-    }
-
-    // Trigger n8n webhook
-    const webhookResult = await triggerWebhook(process.env.N8N_WEBHOOK_ALBUM_FINALIZED, {
-      userId: user.id,
-      albumId: album.id,
-      title,
-      photoCount: selectedPhotos.length,
+    // Prepare n8n webhook payload
+    const n8nPayload = {
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      albumTitle: albumTitle,
+      photoIds: photoIds,
+      description: description || null,
+      coverPhotoId: coverPhotoId || photoIds[0], // Default to first photo if not specified
       timestamp: new Date().toISOString(),
+    }
+
+    console.log("[v0] Triggering album finalization webhook:", {
+      userId: user.id,
+      albumTitle,
+      photoCount: photoIds.length,
     })
+
+    // Trigger n8n webhook - n8n will create album and link photos
+    const webhookResult = await triggerWebhook(process.env.N8N_WEBHOOK_ALBUM_FINALIZED, n8nPayload)
+
+    if (!webhookResult.success) {
+      console.error("[v0] n8n webhook failed:", webhookResult.error)
+      return NextResponse.json(
+        { error: "Failed to create album. Please try again." },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
-      albumId: album.id,
-      webhookTriggered: webhookResult.success,
+      albumId: webhookResult.data?.albumId || null,
+      webhookTriggered: true,
+      message: "Album created successfully",
     })
   } catch (error) {
     console.error("[v0] Album finalized webhook error:", error)

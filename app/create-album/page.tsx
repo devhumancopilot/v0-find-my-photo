@@ -15,25 +15,22 @@ import { Sparkles, ArrowLeft, ArrowRight, Loader2, ImageIcon, Calendar, Check, X
 
 type Step = 1 | 2 | 3
 
-// Mock AI-suggested photos
-const suggestedPhotos = [
-  { id: 1, url: "/beach-sunset-golden-hour.jpg", selected: true },
-  { id: 2, url: "/family-beach-playing.jpg", selected: true },
-  { id: 3, url: "/beach-waves-closeup.jpg", selected: true },
-  { id: 4, url: "/beach-umbrella-chairs.jpg", selected: false },
-  { id: 5, url: "/beach-footprints-sand.jpg", selected: true },
-  { id: 6, url: "/beach-palm-trees.jpg", selected: false },
-  { id: 7, url: "/beach-seashells-collection.jpg", selected: true },
-  { id: 8, url: "/beach-volleyball-game.jpg", selected: false },
-  { id: 9, url: "/beach-picnic-setup.jpg", selected: true },
-]
+// Type for photos returned from n8n
+interface SuggestedPhoto {
+  id: number
+  name: string
+  file_url: string
+  caption: string
+  similarity: number
+}
 
 export default function CreateAlbumPage() {
   const [currentStep, setCurrentStep] = useState<Step>(1)
   const [isProcessing, setIsProcessing] = useState(false)
   const [albumTitle, setAlbumTitle] = useState("")
   const [albumDescription, setAlbumDescription] = useState("")
-  const [selectedPhotos, setSelectedPhotos] = useState<number[]>([1, 2, 3, 5, 7, 9])
+  const [suggestedPhotos, setSuggestedPhotos] = useState<SuggestedPhoto[]>([])
+  const [selectedPhotos, setSelectedPhotos] = useState<number[]>([])
 
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
@@ -50,6 +47,7 @@ export default function CreateAlbumPage() {
           },
           body: JSON.stringify({
             query: albumDescription,
+            albumTitle: albumTitle,
           }),
         })
 
@@ -60,21 +58,62 @@ export default function CreateAlbumPage() {
         const data = await response.json()
         console.log("[v0] Album request created:", data)
 
-        // Simulate AI processing time for better UX
-        setTimeout(() => {
-          setIsProcessing(false)
-          setCurrentStep(2)
-        }, 2000)
+        // Store the photos returned from n8n
+        if (data.photos && Array.isArray(data.photos)) {
+          setSuggestedPhotos(data.photos)
+          // Auto-select all photos by default
+          setSelectedPhotos(data.photos.map((photo: SuggestedPhoto) => photo.id))
+
+          if (data.photos.length === 0) {
+            console.warn("[v0] No photos returned from n8n webhook")
+          }
+        } else {
+          console.warn("[v0] No photos data in response:", data)
+          setSuggestedPhotos([])
+          setSelectedPhotos([])
+        }
+
+        setIsProcessing(false)
+        setCurrentStep(2)
       } catch (error) {
         console.error("[v0] Album request error:", error)
         alert("Failed to process request. Please try again.")
         setIsProcessing(false)
       }
-    } else if (currentStep < 3) {
-      setCurrentStep((prev) => (prev + 1) as Step)
-    } else {
-      // Create album
-      window.location.href = "/dashboard"
+    } else if (currentStep === 2) {
+      // Move from Step 2 to Step 3
+      setCurrentStep(3)
+    } else if (currentStep === 3) {
+      // Finalize album - send to n8n via backend
+      setIsProcessing(true)
+      try {
+        const response = await fetch("/api/webhooks/album-finalized", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            albumTitle: albumTitle,
+            photoIds: selectedPhotos, // Array of photo IDs like [14, 15, 16]
+            description: albumDescription,
+            coverPhotoId: selectedPhotos[0] || null, // First selected photo as cover
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to create album")
+        }
+
+        const data = await response.json()
+        console.log("[v0] Album created:", data)
+
+        // Redirect to dashboard on success
+        window.location.href = "/dashboard"
+      } catch (error) {
+        console.error("[v0] Album creation error:", error)
+        alert("Failed to create album. Please try again.")
+        setIsProcessing(false)
+      }
     }
   }
 
@@ -252,34 +291,49 @@ export default function CreateAlbumPage() {
                 </CardContent>
               </Card>
 
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {suggestedPhotos.map((photo) => (
-                  <button
-                    key={photo.id}
-                    onClick={() => togglePhotoSelection(photo.id)}
-                    className="group relative aspect-square overflow-hidden rounded-xl border-2 transition-all hover:shadow-lg"
-                    style={{
-                      borderColor: selectedPhotos.includes(photo.id) ? "hsl(var(--primary))" : "hsl(var(--border))",
-                    }}
-                  >
-                    <img
-                      src={photo.url || "/placeholder.svg"}
-                      alt={`Photo ${photo.id}`}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div
-                      className={`absolute inset-0 transition-opacity ${
-                        selectedPhotos.includes(photo.id) ? "bg-primary/20" : "bg-black/0 group-hover:bg-black/10"
-                      }`}
-                    />
-                    {selectedPhotos.includes(photo.id) && (
-                      <div className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary shadow-lg">
-                        <Check className="h-5 w-5 text-white" />
+              {suggestedPhotos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <ImageIcon className="mb-4 h-12 w-12 text-muted-foreground" />
+                  <h3 className="mb-2 text-lg font-semibold text-foreground">No photos found</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Try adjusting your search criteria or upload photos manually
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {suggestedPhotos.map((photo) => (
+                    <button
+                      key={photo.id}
+                      onClick={() => togglePhotoSelection(photo.id)}
+                      className="group relative aspect-square overflow-hidden rounded-xl border-2 transition-all hover:shadow-lg"
+                      style={{
+                        borderColor: selectedPhotos.includes(photo.id) ? "hsl(var(--primary))" : "hsl(var(--border))",
+                      }}
+                      title={photo.caption}
+                    >
+                      <img
+                        src={photo.file_url}
+                        alt={photo.caption || photo.name}
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                      <div
+                        className={`absolute inset-0 transition-opacity ${
+                          selectedPhotos.includes(photo.id) ? "bg-primary/20" : "bg-black/0 group-hover:bg-black/10"
+                        }`}
+                      />
+                      {selectedPhotos.includes(photo.id) && (
+                        <div className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary shadow-lg">
+                          <Check className="h-5 w-5 text-white" />
+                        </div>
+                      )}
+                      {/* Show similarity score */}
+                      <div className="absolute bottom-2 left-2 rounded-md bg-black/70 px-2 py-1 text-xs text-white">
+                        {Math.round(photo.similarity * 100)}% match
                       </div>
-                    )}
-                  </button>
-                ))}
-              </div>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <Card className="border-white/20 bg-white/80 backdrop-blur-sm">
                 <CardContent className="p-4">
@@ -350,16 +404,31 @@ export default function CreateAlbumPage() {
                 </div>
 
                 <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-3">
-                  <Button onClick={handleBack} variant="outline" className="flex-1 w-full bg-transparent">
+                  <Button
+                    onClick={handleBack}
+                    variant="outline"
+                    className="flex-1 w-full bg-transparent"
+                    disabled={isProcessing}
+                  >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back
                   </Button>
                   <Button
                     onClick={handleNext}
+                    disabled={isProcessing}
                     className="flex-1 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
                   >
-                    <Check className="mr-2 h-4 w-4" />
-                    Create Album
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating Album...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Create Album
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
