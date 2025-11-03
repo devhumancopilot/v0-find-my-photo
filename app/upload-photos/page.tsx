@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -56,13 +56,13 @@ export default function UploadPhotosPage() {
     setUploadedImages([...uploadedImages, ...newImages])
   }
 
-  const handleGooglePhotosSelected = (photos: Array<{ id: string; baseUrl: string; mimeType: string; filename?: string }>) => {
+  const handleGooglePhotosSelected = useCallback((photos: Array<{ id: string; baseUrl: string; mimeType: string; filename?: string }>) => {
     const newGooglePhotos = photos.map((photo) => ({
       ...photo,
       source: 'google_photos' as const,
     }))
     setGooglePhotos(newGooglePhotos)
-  }
+  }, [])
 
   const removeImage = (id: string) => {
     const image = uploadedImages.find((img) => img.id === id)
@@ -86,33 +86,117 @@ export default function UploadPhotosPage() {
 
     try {
       let uploadedCount = 0
+      const allPayloads: Array<{
+        name: string
+        data: string
+        type: string
+        size: number
+      }> = []
 
-      // Upload manual files if any
+      // Convert manual files to base64 payloads
       if (uploadedImages.length > 0) {
-        const formData = new FormData()
-        uploadedImages.forEach((image) => {
-          formData.append("files", image.file)
+        for (const image of uploadedImages) {
+          const fileBuffer = await image.file.arrayBuffer()
+          const base64Data = Buffer.from(fileBuffer).toString("base64")
+
+          const payload = {
+            name: image.file.name,
+            data: base64Data,
+            type: image.file.type,
+            size: image.file.size,
+          }
+
+          console.log(`Converted device photo to base64:`, {
+            name: payload.name,
+            type: payload.type,
+            size: payload.size,
+            base64Length: payload.data.length,
+          })
+
+          allPayloads.push(payload)
+
+          uploadedCount++
+          setUploadProgress((uploadedCount / totalPhotos) * 100)
+        }
+      }
+
+      // Convert Google Photos to base64 payloads
+      if (googlePhotos.length > 0) {
+        for (const photo of googlePhotos) {
+          try {
+            // Fetch the full-size image from Google Photos via our proxy
+            // Use =d parameter to download the original quality
+            const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`
+
+            console.log(`Fetching Google Photo ${photo.id} for upload...`)
+            const imageResponse = await fetch(proxyUrl)
+
+            if (!imageResponse.ok) {
+              console.error(`Failed to fetch Google Photo ${photo.id}:`, imageResponse.status, imageResponse.statusText)
+              continue
+            }
+
+            const imageBuffer = await imageResponse.arrayBuffer()
+            const base64Data = Buffer.from(imageBuffer).toString("base64")
+
+            const payload = {
+              name: photo.filename || `google-photo-${photo.id}.jpg`,
+              data: base64Data,
+              type: photo.mimeType,
+              size: imageBuffer.byteLength,
+            }
+
+            console.log(`Converted Google Photo ${photo.id} to base64:`, {
+              name: payload.name,
+              type: payload.type,
+              size: payload.size,
+              base64Length: payload.data.length,
+            })
+
+            allPayloads.push(payload)
+
+            uploadedCount++
+            setUploadProgress((uploadedCount / totalPhotos) * 100)
+          } catch (error) {
+            console.error(`Error processing Google Photo ${photo.id}:`, error)
+            // Continue with other photos
+          }
+        }
+      }
+
+      // Send all photos through the webhook
+      if (allPayloads.length > 0) {
+        console.log(`Sending ${allPayloads.length} photos to webhook:`, {
+          totalPhotos: allPayloads.length,
+          devicePhotos: uploadedImages.length,
+          googlePhotos: googlePhotos.length,
+          payloadStructure: allPayloads.map((p) => ({
+            name: p.name,
+            type: p.type,
+            size: p.size,
+            hasBase64Data: !!p.data,
+            base64Length: p.data.length,
+          })),
         })
 
         const response = await fetch("/api/webhooks/photos-upload", {
           method: "POST",
-          body: formData,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            images: allPayloads,
+          }),
         })
 
         if (!response.ok) {
+          const errorText = await response.text()
+          console.error("Upload failed:", response.status, errorText)
           throw new Error("Upload failed")
         }
 
-        uploadedCount += uploadedImages.length
-        setUploadProgress((uploadedCount / totalPhotos) * 100)
-      }
-
-      // Process Google Photos if any
-      if (googlePhotos.length > 0) {
-        // Google Photos are already stored in the database
-        // Here we can optionally trigger additional processing or just mark them as processed
-        uploadedCount += googlePhotos.length
-        setUploadProgress((uploadedCount / totalPhotos) * 100)
+        const result = await response.json()
+        console.log("Upload successful:", result)
       }
 
       // Clean up object URLs
@@ -156,7 +240,7 @@ export default function UploadPhotosPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto max-w-4xl px-4 py-8">
+      <main className="container mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8">
           <h1 className="mb-2 text-3xl font-bold text-foreground">Upload Photos</h1>
           <p className="text-muted-foreground">
@@ -173,119 +257,147 @@ export default function UploadPhotosPage() {
 
         {!uploadComplete ? (
           <div className="space-y-6">
-            {/* Google Photos Picker Section */}
-            <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ImageIconLucide className="h-5 w-5" />
-                  Import from Google Photos
-                </CardTitle>
-                <CardDescription>
-                  Connect your Google Photos account and select photos to import
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <GooglePhotosPicker onPhotosSelected={handleGooglePhotosSelected} />
-              </CardContent>
-            </Card>
-
-            {/* Manual Upload Section */}
-            <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle>Upload from Device</CardTitle>
-                <CardDescription>
-                  Choose multiple photos to upload. Supported formats: JPG, PNG, WEBP
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Upload Area */}
-                {!isUploading && (
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleFileSelect}
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      disabled={isUploading}
-                    />
-                    <div className="flex min-h-[200px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/20 p-8 text-center transition-colors hover:border-muted-foreground/50 hover:bg-muted/30">
-                      <Upload className="mb-4 h-12 w-12 text-muted-foreground" />
-                      <p className="mb-2 text-lg font-medium text-foreground">
-                        Click to upload or drag and drop
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Upload as many photos as you'd like
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Manual Upload Preview Grid */}
-                {uploadedImages.length > 0 && (
-                  <div>
-                    <div className="mb-4 flex items-center justify-between">
-                      <p className="text-sm font-medium text-foreground">
-                        {uploadedImages.length} photo{uploadedImages.length !== 1 ? "s" : ""} selected from device
-                      </p>
-                      {!isUploading && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            uploadedImages.forEach((img) => URL.revokeObjectURL(img.preview))
-                            setUploadedImages([])
-                          }}
-                        >
-                          Clear All
-                        </Button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                      {uploadedImages.map((image) => (
-                        <div key={image.id} className="group relative aspect-square overflow-hidden rounded-lg">
-                          <img
-                            src={image.preview}
-                            alt="Preview"
-                            className="h-full w-full object-cover"
-                          />
-                          {!isUploading && (
-                            <button
-                              onClick={() => removeImage(image.id)}
-                              className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Google Photos Preview Grid */}
-            {googlePhotos.length > 0 && (
+            {/* Horizontal Layout: Manual Upload and Google Photos */}
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {/* Manual Upload Section */}
               <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <ImageIconLucide className="h-5 w-5 text-blue-600" />
-                    Google Photos Selection
+                    <Upload className="h-5 w-5" />
+                    Upload from Device
                   </CardTitle>
                   <CardDescription>
-                    {googlePhotos.length} photo{googlePhotos.length !== 1 ? "s" : ""} selected from Google Photos
+                    Choose photos from your device
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                    {googlePhotos.map((photo) => (
-                      <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg">
+                <CardContent>
+                  {!isUploading && (
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        disabled={isUploading}
+                      />
+                      <div className="flex min-h-[200px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/20 p-6 text-center transition-colors hover:border-muted-foreground/50 hover:bg-muted/30">
+                        <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
+                        <p className="mb-1 text-base font-medium text-foreground">
+                          Click to upload
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          JPG, PNG, WEBP
+                        </p>
+                        {uploadedImages.length > 0 && (
+                          <p className="mt-3 text-sm font-semibold text-blue-600">
+                            {uploadedImages.length} photo{uploadedImages.length !== 1 ? "s" : ""} selected
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Google Photos Picker Section */}
+              <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ImageIconLucide className="h-5 w-5" />
+                    Import from Google Photos
+                  </CardTitle>
+                  <CardDescription>
+                    Connect and select photos
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex min-h-[200px] flex-col items-center justify-center">
+                    <GooglePhotosPicker
+                      onPhotosSelected={handleGooglePhotosSelected}
+                      showSelectedCount={false}
+                    />
+                    {googlePhotos.length > 0 && (
+                      <p className="mt-3 text-sm font-semibold text-blue-600">
+                        {googlePhotos.length} photo{googlePhotos.length !== 1 ? "s" : ""} selected
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Combined Preview Section at Bottom */}
+            {(uploadedImages.length > 0 || googlePhotos.length > 0) && (
+              <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Selected Photos</CardTitle>
+                      <CardDescription>
+                        {totalPhotos} photo{totalPhotos !== 1 ? "s" : ""} ready to upload
+                        {uploadedImages.length > 0 && ` • ${uploadedImages.length} from device`}
+                        {googlePhotos.length > 0 && ` • ${googlePhotos.length} from Google Photos`}
+                      </CardDescription>
+                    </div>
+                    {!isUploading && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          uploadedImages.forEach((img) => URL.revokeObjectURL(img.preview))
+                          setUploadedImages([])
+                          setGooglePhotos([])
+                        }}
+                      >
+                        Clear All
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+                    {/* Manual Upload Preview Images */}
+                    {uploadedImages.map((image) => (
+                      <div key={image.id} className="group relative aspect-square overflow-hidden rounded-lg">
                         <img
-                          src={`${photo.baseUrl}=w400-h400`}
-                          alt={photo.filename || "Google Photo"}
+                          src={image.preview}
+                          alt="Preview"
                           className="h-full w-full object-cover"
                         />
+                        {!isUploading && (
+                          <button
+                            onClick={() => removeImage(image.id)}
+                            className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                        <div className="absolute bottom-2 left-2 rounded bg-purple-600 px-2 py-1 text-xs text-white">
+                          Device
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Google Photos Preview Images */}
+                    {googlePhotos.map((photo) => (
+                      <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg bg-muted/20">
+                        {photo.baseUrl ? (
+                          <img
+                            src={`/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=w400-h400`}
+                            alt={photo.filename || "Google Photo"}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              console.error('Failed to load Google Photo via proxy:', photo.id, photo.baseUrl);
+                              // Show error placeholder
+                              e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23ddd" width="400" height="400"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="16" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3ELoading Error%3C/text%3E%3C/svg%3E';
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-muted/40">
+                            <p className="text-xs text-muted-foreground">No preview</p>
+                          </div>
+                        )}
                         {!isUploading && (
                           <button
                             onClick={() => removeGooglePhoto(photo.id)}
@@ -300,15 +412,6 @@ export default function UploadPhotosPage() {
                       </div>
                     ))}
                   </div>
-                  {!isUploading && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setGooglePhotos([])}
-                    >
-                      Clear Google Photos
-                    </Button>
-                  )}
                 </CardContent>
               </Card>
             )}

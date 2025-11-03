@@ -186,7 +186,17 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
       }
 
       const data = await response.json();
-      allItems.push(...data.mediaItems);
+
+      // Validate that mediaItems have baseUrl
+      const validItems = (data.mediaItems || []).filter((item: PickedMediaItem) => {
+        if (!item.baseUrl) {
+          console.warn('Media item missing baseUrl:', item);
+          return false;
+        }
+        return true;
+      });
+
+      allItems.push(...validItems);
       pageToken = data.nextPageToken;
     } while (pageToken);
 

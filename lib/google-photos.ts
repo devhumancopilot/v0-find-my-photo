@@ -32,6 +32,30 @@ export interface PickingSession {
   mediaItemsSet?: boolean;
 }
 
+// Raw API response structure from Google Photos
+export interface GooglePhotoMediaFile {
+  baseUrl: string;
+  mimeType: string;
+  mediaFileMetadata?: {
+    width: number;
+    height: number;
+  };
+  filename?: string;
+}
+
+export interface GooglePhotoMediaItem {
+  id: string;
+  createTime: string;
+  type: string;
+  mediaFile: GooglePhotoMediaFile;
+}
+
+export interface GooglePhotosApiResponse {
+  mediaItems: GooglePhotoMediaItem[];
+  nextPageToken?: string;
+}
+
+// Simplified interface for frontend use
 export interface PickedMediaItem {
   id: string;
   baseUrl: string;
@@ -185,12 +209,13 @@ export async function getPickerSession(
 
 /**
  * List media items from a completed session
+ * Returns raw Google Photos API response
  */
 export async function listMediaItems(
   sessionId: string,
   accessToken: string,
   pageToken?: string
-): Promise<MediaItemsResponse> {
+): Promise<GooglePhotosApiResponse> {
   const params = new URLSearchParams({
     sessionId,
     ...(pageToken && { pageToken }),

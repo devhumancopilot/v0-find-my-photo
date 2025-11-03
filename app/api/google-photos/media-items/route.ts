@@ -10,7 +10,6 @@ import {
   refreshAccessToken,
   isTokenExpired,
   deletePickerSession,
-  getPhotoThumbnailUrl,
 } from '@/lib/google-photos';
 
 export async function GET(request: NextRequest) {
@@ -98,32 +97,17 @@ export async function GET(request: NextRequest) {
     // Get media items from Google Photos
     const response = await listMediaItems(sessionId, accessToken, pageToken);
 
-    // Store imported media items in database
-    if (response.mediaItems && response.mediaItems.length > 0) {
-      const imports = response.mediaItems.map((item) => ({
-        user_id: user.id,
-        session_id: sessionId,
-        google_media_item_id: item.id,
-        base_url: item.baseUrl,
-        mime_type: item.mimeType,
-        filename: item.filename || `photo-${item.id}`,
-        base_url_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 60 minutes
-        metadata: {
-          mimeType: item.mimeType,
-          thumbnailUrl: getPhotoThumbnailUrl(item.baseUrl),
-        },
-      }));
+    // Map the nested structure to a flat structure for frontend
+    // Google Photos API returns: { mediaFile: { baseUrl, mimeType, filename } }
+    // We need: { baseUrl, mimeType, filename }
+    const mappedItems = (response.mediaItems || []).map((item) => ({
+      id: item.id,
+      baseUrl: item.mediaFile.baseUrl,
+      mimeType: item.mediaFile.mimeType,
+      filename: item.mediaFile.filename || `photo-${item.id}.jpg`,
+    }));
 
-      // Upsert to handle duplicates
-      const { error: insertError } = await supabase
-        .from('google_photos_imports')
-        .upsert(imports, { onConflict: 'user_id,google_media_item_id' });
-
-      if (insertError) {
-        console.error('Failed to store imported media items:', insertError);
-        // Continue anyway - we still return the items
-      }
-    }
+    console.log(`Successfully retrieved ${mappedItems.length} Google Photos media items`);
 
     // Clean up session if all items retrieved (no next page)
     if (!response.nextPageToken) {
@@ -141,7 +125,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      mediaItems: response.mediaItems || [],
+      mediaItems: mappedItems,
       nextPageToken: response.nextPageToken,
       hasMore: !!response.nextPageToken,
     });
