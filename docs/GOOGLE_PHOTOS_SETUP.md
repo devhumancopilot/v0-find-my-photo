@@ -75,17 +75,17 @@ Before creating credentials, you need to configure the OAuth consent screen:
 
 Add the following to your `.env.local` file:
 
-```env
+\`\`\`env
 # Google Photos Picker API Configuration
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id-here
 GOOGLE_CLIENT_SECRET=your-client-secret-here
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
-```
+\`\`\`
 
 **For production**, update to:
-```env
+\`\`\`env
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=https://yourdomain.com/api/auth/google/callback
-```
+\`\`\`
 
 ## Step 6: Verify Setup
 
@@ -102,9 +102,9 @@ After implementing the code (following the main implementation), verify your set
 
 ### OAuth Scope
 The application uses the scope:
-```
+\`\`\`
 https://www.googleapis.com/auth/photospicker.mediaitems.readonly
-```
+\`\`\`
 
 This scope:
 - ✅ Allows users to select photos via Google Photos Picker

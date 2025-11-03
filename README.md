@@ -63,7 +63,7 @@ Find My Photo transforms the way you create photo albums by leveraging AI-powere
 
 ## Project Structure
 
-```
+\`\`\`
 v0-find-my-photo/
 ├── app/                          # Next.js App Router pages
 │   ├── page.tsx                 # Landing page
@@ -81,7 +81,7 @@ v0-find-my-photo/
 │   └── supabase/                # Supabase client configuration
 └── public/                      # Static assets
 
-```
+\`\`\`
 
 ## Getting Started
 
@@ -93,19 +93,19 @@ v0-find-my-photo/
 ### Installation
 
 1. Clone the repository:
-```bash
+\`\`\`bash
 git clone https://github.com/your-username/v0-find-my-photo.git
 cd v0-find-my-photo
-```
+\`\`\`
 
 2. Install dependencies:
-```bash
+\`\`\`bash
 npm install
-```
+\`\`\`
 
 3. Set up environment variables:
 Create a `.env.local` file with the following:
-```env
+\`\`\`env
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -114,14 +114,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
-```
+\`\`\`
 
 **Note:** For Google Photos integration setup, see `GOOGLE_PHOTOS_SETUP.md`
 
 4. Run the development server:
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
@@ -212,12 +212,12 @@ For detailed Google Photos integration documentation, see `GOOGLE_PHOTOS_IMPLEME
 
 ## Development Scripts
 
-```bash
+\`\`\`bash
 npm run dev      # Start development server
 npm run build    # Build for production
 npm run start    # Start production server
 npm run lint     # Run ESLint
-```
+\`\`\`
 
 ## Deployment
 

@@ -2,7 +2,7 @@
 
 ## 🎯 3-Step Workflow Overview
 
-```
+\`\`\`
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃  STEP 1: FIND PHOTOS (Semantic Search)                       ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
@@ -109,14 +109,14 @@ n8n Webhook (N8N_WEBHOOK_ALBUM_FINALIZED):
   ✅ (Optional) Generate thumbnails
   ✅ (Optional) Extract AI metadata
   ✅ (Optional) Send email notification
-```
+\`\`\`
 
 ---
 
 ## 🔑 Key Database Tables
 
 ### albums
-```sql
+\`\`\`sql
 id                  bigint PRIMARY KEY
 user_id            uuid (references auth.users)
 album_title        text
@@ -128,10 +128,10 @@ status             text (pending/active/archived)
 processing_status  text (pending/processing/completed/failed)
 created_at         timestamp
 updated_at         timestamp
-```
+\`\`\`
 
 ### photos
-```sql
+\`\`\`sql
 id              bigserial PRIMARY KEY
 user_id         uuid (references auth.users)
 album_id        bigint (references albums.id)
@@ -146,14 +146,14 @@ metadata        jsonb
 thumbnail_url   text
 created_at      timestamp
 updated_at      timestamp
-```
+\`\`\`
 
 ---
 
 ## 📡 n8n Webhooks
 
 ### Webhook 1: Find Photos
-```
+\`\`\`
 URL: N8N_WEBHOOK_FIND_PHOTOS
 Trigger: Step 1 "Find Photos" button
 
@@ -170,10 +170,10 @@ Should Do:
 1. Search photos table
 2. Store results in albums.photos
 3. Update processing_status = 'completed'
-```
+\`\`\`
 
 ### Webhook 2: Album Finalized
-```
+\`\`\`
 URL: N8N_WEBHOOK_ALBUM_FINALIZED
 Trigger: Step 3 "Create Album" button
 
@@ -190,7 +190,7 @@ Should Do:
 1. Generate thumbnails (optional)
 2. Extract AI metadata (optional)
 3. Send email notification (optional)
-```
+\`\`\`
 
 ---
 
@@ -198,12 +198,12 @@ Should Do:
 
 ### ❌ Step 2: Not Fetching Real Data
 **File:** `app/create-album/page.tsx` (line 18-28)
-```javascript
+\`\`\`javascript
 const suggestedPhotos = [
   { id: 1, url: "/beach-sunset-golden-hour.jpg", selected: true },
   // ... hardcoded mock data
 ]
-```
+\`\`\`
 
 **Fix Needed:**
 - Fetch from API endpoint
@@ -213,12 +213,12 @@ const suggestedPhotos = [
 
 ### ❌ Step 3: Not Calling API
 **File:** `app/create-album/page.tsx` (line 76-78)
-```javascript
+\`\`\`javascript
 } else {
   // Create album
   window.location.href = "/dashboard"  // Just redirects!
 }
-```
+\`\`\`
 
 **Fix Needed:**
 - Call `/api/webhooks/album-finalized`
@@ -254,7 +254,7 @@ const suggestedPhotos = [
 ## 🚀 Quick Start: n8n Setup
 
 ### Workflow 1 (5 minutes)
-```
+\`\`\`
 1. Create webhook node → /webhook/find-photos
 2. Add Supabase query node:
    SELECT id, name, file_url, caption
@@ -266,20 +266,20 @@ const suggestedPhotos = [
    SET photos = {{ $json.file_urls }},
        processing_status = 'completed'
    WHERE id = {{ $json.requestId }}
-```
+\`\`\`
 
 ### Workflow 2 (2 minutes)
-```
+\`\`\`
 1. Create webhook node → /webhook/album-finalized
 2. Add console log node (for testing)
 3. (Optional) Add email node
-```
+\`\`\`
 
 ---
 
 ## 📞 Environment Variables
 
-```bash
+\`\`\`bash
 # In .env.local
 N8N_WEBHOOK_FIND_PHOTOS=https://your-n8n.com/webhook/find-photos
 N8N_WEBHOOK_ALBUM_FINALIZED=https://your-n8n.com/webhook/album-finalized
@@ -288,14 +288,14 @@ N8N_WEBHOOK_ALBUM_FINALIZED=https://your-n8n.com/webhook/album-finalized
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your-service-role-key
 OPENAI_API_KEY=sk-... (optional, for AI features)
-```
+\`\`\`
 
 ---
 
 ## 🧪 Testing
 
 ### Test Step 1
-```bash
+\`\`\`bash
 curl -X POST http://localhost:3000/api/webhooks/album-create-request \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -303,15 +303,15 @@ curl -X POST http://localhost:3000/api/webhooks/album-create-request \
     "query": "beach sunset photos",
     "albumTitle": "Test Album"
   }'
-```
+\`\`\`
 
 ### Check Database
-```sql
+\`\`\`sql
 SELECT id, album_title, processing_status, photos
 FROM albums
 ORDER BY created_at DESC
 LIMIT 1;
-```
+\`\`\`
 
 ---
 
