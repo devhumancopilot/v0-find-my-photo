@@ -13,7 +13,8 @@ import {
   Share2,
   Edit,
   Trash2,
-  Heart
+  Heart,
+  Printer
 } from "lucide-react"
 
 interface AlbumPageProps {
@@ -141,6 +142,12 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                 <Download className="mr-2 h-4 w-4" />
                 Download
               </Button>
+              <Link href={`/albums/${id}/print`}>
+                <Button variant="outline" size="sm">
+                  <Printer className="mr-2 h-4 w-4" />
+                  Preview for Print
+                </Button>
+              </Link>
               <Button variant="outline" size="sm">
                 <Edit className="mr-2 h-4 w-4" />
                 Edit

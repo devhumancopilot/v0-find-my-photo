@@ -14,8 +14,11 @@ Find My Photo transforms the way you create photo albums by leveraging AI-powere
 - **Similarity Scoring**: Each suggested photo includes a match percentage to help you make selections
 
 ### Photo Management
-- **Upload Photos**: Securely upload photos directly to your personal collection
+- **Multiple Upload Sources**:
+  - Upload photos from your device
+  - Import photos from Google Photos via official Google Photos Picker API
 - **Photo Gallery**: View all your uploaded photos in an organized, responsive gallery
+- **Google Photos Integration**: Securely connect your Google Photos account and select photos to import
 - **Private & Secure**: Your photos remain private and are only accessible to you
 
 ### Album Creation
@@ -49,6 +52,7 @@ Find My Photo transforms the way you create photo albums by leveraging AI-powere
 ### AI & Processing
 - **Semantic Search API**: AI-powered photo analysis and matching
 - **n8n Webhooks**: Automation workflows for photo processing and album creation
+- **Google Photos Picker API**: Official integration for secure photo import from Google Photos
 
 ### UI Components
 - Radix UI primitives for accessibility
@@ -102,9 +106,17 @@ npm install
 3. Set up environment variables:
 Create a `.env.local` file with the following:
 ```env
+# Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Google Photos Integration (Optional)
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 ```
+
+**Note:** For Google Photos integration setup, see `GOOGLE_PHOTOS_SETUP.md`
 
 4. Run the development server:
 ```bash
@@ -116,9 +128,15 @@ npm run dev
 ### Database Setup
 
 The application requires the following Supabase tables:
-- `profiles`: User profile information
+- `profiles`: User profile information (includes Google OAuth tokens)
 - `photos`: Uploaded photo metadata and storage references
 - `albums`: Album information and photo associations
+- `google_photos_sessions`: Tracks Google Photos Picker sessions
+- `google_photos_imports`: Stores imported Google Photos metadata
+
+Run migrations in order:
+1. `migrations/001_extend_schema_for_multi_user.sql`
+2. `migrations/002_add_google_photos_integration.sql`
 
 ## Features in Detail
 
@@ -135,9 +153,18 @@ The application requires the following Supabase tables:
 - Profile creation during onboarding
 
 ### Photo Upload
-- Multi-file selection and upload
-- Image preview before upload
-- Progress tracking during upload
+- **Multiple Upload Methods**:
+  - Manual file selection from device
+  - Google Photos Picker integration
+- **Device Upload**:
+  - Multi-file selection
+  - Image preview before upload
+  - Progress tracking
+- **Google Photos Import**:
+  - OAuth 2.0 secure authentication
+  - Browse and select photos from Google Photos library
+  - Thumbnail previews
+  - Batch import support
 - Automatic integration with photo library
 
 ### Album Creation Workflow
@@ -166,19 +193,22 @@ The application requires the following Supabase tables:
 
 ## API Routes
 
-### `/api/webhooks/photos-upload`
-- Handles photo file uploads
+### Photo Upload
+- **`/api/webhooks/photos-upload`**: Handles photo file uploads from device
 - Processes images for semantic search
 - Stores metadata in Supabase
 
-### `/api/webhooks/album-create-request`
-- Sends album description to AI service
-- Returns semantically matched photos with scores
+### Album Management
+- **`/api/webhooks/album-create-request`**: Sends album description to AI service
+- **`/api/webhooks/album-finalized`**: Creates album and associates photos
 
-### `/api/webhooks/album-finalized`
-- Creates album record in database
-- Associates selected photos with album
-- Sets cover photo
+### Google Photos Integration
+- **`/api/auth/google/callback`**: OAuth 2.0 callback handler
+- **`/api/google-photos/create-session`**: Creates Google Photos Picker session
+- **`/api/google-photos/poll-session/[sessionId]`**: Polls session status
+- **`/api/google-photos/media-items`**: Retrieves selected photos
+
+For detailed Google Photos integration documentation, see `GOOGLE_PHOTOS_IMPLEMENTATION.md`
 
 ## Development Scripts
 
@@ -224,6 +254,12 @@ This project is private and proprietary.
 
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
 - Icons from [Lucide](https://lucide.dev/)
+- Google Photos integration via [Google Photos Picker API](https://developers.google.com/photos/picker)
+
+## Additional Documentation
+
+- **`GOOGLE_PHOTOS_SETUP.md`**: Step-by-step setup guide for Google Cloud Console and OAuth configuration
+- **`GOOGLE_PHOTOS_IMPLEMENTATION.md`**: Complete technical documentation of the Google Photos integration
 
 ---
 
