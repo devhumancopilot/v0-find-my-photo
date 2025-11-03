@@ -87,11 +87,11 @@ Users can now connect their Google Photos account and select photos using the of
 ### 4. Configuration Files
 
 **Environment Variables** (`.env.local`)
-```env
+\`\`\`env
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
-```
+\`\`\`
 
 **Setup Guide** (`GOOGLE_PHOTOS_SETUP.md`)
 - Step-by-step Google Cloud Console configuration
@@ -104,7 +104,7 @@ NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 Here's how the complete feature works:
 
 ### 1. User Authentication
-```
+\`\`\`
 User clicks "Select from Google Photos"
   ↓
 Hook checks for OAuth token
@@ -114,10 +114,10 @@ If not authenticated → Redirect to Google OAuth
 User grants permissions
   ↓
 Callback stores tokens → Redirect to upload page
-```
+\`\`\`
 
 ### 2. Photo Selection
-```
+\`\`\`
 User clicks "Select from Google Photos" (authenticated)
   ↓
 POST /api/google-photos/create-session
@@ -129,10 +129,10 @@ Open pickerUri in popup window
 User browses and selects photos in Google Photos UI
   ↓
 User clicks "Done"
-```
+\`\`\`
 
 ### 3. Retrieval
-```
+\`\`\`
 Frontend polls GET /api/google-photos/poll-session/[sessionId]
   ↓
 When mediaItemsSet === true
@@ -146,10 +146,10 @@ Store in google_photos_imports table
 Display thumbnails in UI
   ↓
 Session cleanup (delete from Google)
-```
+\`\`\`
 
 ### 4. Upload
-```
+\`\`\`
 User clicks "Upload All Photos"
   ↓
 Manual files → POST /api/webhooks/photos-upload
@@ -157,14 +157,14 @@ Manual files → POST /api/webhooks/photos-upload
 Google Photos already stored → Mark as processed
   ↓
 Redirect to dashboard
-```
+\`\`\`
 
 ## Technical Details
 
 ### OAuth 2.0 Scope
-```
+\`\`\`
 https://www.googleapis.com/auth/photospicker.mediaitems.readonly
-```
+\`\`\`
 - **Read-only** access to user-selected photos
 - Complies with Google's March 31, 2025 policy changes
 - No access to photos the user doesn't explicitly select
@@ -236,7 +236,7 @@ The implementation works in:
 
 ## File Structure
 
-```
+\`\`\`
 v0-find-my-photo/
 ├── GOOGLE_PHOTOS_SETUP.md          # Setup instructions
 ├── GOOGLE_PHOTOS_IMPLEMENTATION.md # This file
@@ -269,7 +269,7 @@ v0-find-my-photo/
 │           │   └── route.ts        # Poll session status
 │           └── media-items/
 │               └── route.ts        # Get selected photos
-```
+\`\`\`
 
 ## Testing Checklist
 

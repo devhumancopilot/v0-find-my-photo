@@ -8,7 +8,7 @@ The "Create Album" feature is a **3-step wizard** that uses AI to find and organ
 
 ## 📊 High-Level Architecture
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         CREATE ALBUM FLOW                           │
 └─────────────────────────────────────────────────────────────────────┘
@@ -46,7 +46,7 @@ STEP 3: Finalize Album
                              2. Create photo records         - Generate thumbnails
                              3. Link photos to album         - Extract metadata
                                                              - Send notifications
-```
+\`\`\`
 
 ---
 
@@ -60,7 +60,7 @@ STEP 3: Finalize Album
 3. Clicks **"Find Photos"** button
 
 **What the Frontend Sends:**
-```javascript
+\`\`\`javascript
 POST /api/webhooks/album-create-request
 
 Headers: {
@@ -71,7 +71,7 @@ Body: {
   "query": "Photos from my beach vacation with palm trees and sunset",
   "albumTitle": "Summer Beach Trip"
 }
-```
+\`\`\`
 
 ---
 
@@ -79,29 +79,29 @@ Body: {
 
 **Line-by-Line Explanation:**
 
-```typescript
+\`\`\`typescript
 // 1. AUTHENTICATION (Lines 9-17)
 const { data: { user }, error: authError } = await supabase.auth.getUser()
 
 if (authError || !user) {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 }
-```
+\`\`\`
 ✅ Verifies user is logged in
 ✅ Gets user ID and email from JWT token
 
 ---
 
-```typescript
+\`\`\`typescript
 // 2. EXTRACT REQUEST DATA (Lines 19-20)
 const body = await request.json()
 const { query, image, albumTitle } = body
-```
+\`\`\`
 ✅ Extracts the search query and album title from request
 
 ---
 
-```typescript
+\`\`\`typescript
 // 3. VALIDATE INPUT (Lines 22-28)
 if (!query && !image) {
   return NextResponse.json(
@@ -109,12 +109,12 @@ if (!query && !image) {
     { status: 400 }
   )
 }
-```
+\`\`\`
 ✅ Ensures user provided either text query OR image for search
 
 ---
 
-```typescript
+\`\`\`typescript
 // 4. CREATE ALBUM RECORD IN DATABASE (Lines 30-42)
 const { data: albumRequest, error: requestError } = await supabase
   .from("albums")
@@ -128,10 +128,10 @@ const { data: albumRequest, error: requestError } = await supabase
   })
   .select()
   .single()
-```
+\`\`\`
 
 **Database Record Created:**
-```json
+\`\`\`json
 {
   "id": 42,
   "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -145,7 +145,7 @@ const { data: albumRequest, error: requestError } = await supabase
   "created_at": "2025-01-15T14:22:00.000Z",
   "updated_at": "2025-01-15T14:22:00.000Z"
 }
-```
+\`\`\`
 
 **Why Create This Record?**
 - ✅ Tracks the album creation request
@@ -156,7 +156,7 @@ const { data: albumRequest, error: requestError } = await supabase
 
 ---
 
-```typescript
+\`\`\`typescript
 // 5. PREPARE N8N WEBHOOK PAYLOAD (Lines 46-73)
 const n8nPayload = {
   user: {
@@ -173,20 +173,20 @@ const n8nPayload = {
 if (image) {
   n8nPayload.image = image  // base64 encoded image
 }
-```
+\`\`\`
 
 ---
 
-```typescript
+\`\`\`typescript
 // 6. TRIGGER N8N WEBHOOK (Line 77)
 const webhookResult = await triggerWebhook(
   process.env.N8N_WEBHOOK_FIND_PHOTOS,  // Your n8n webhook URL
   n8nPayload
 )
-```
+\`\`\`
 
 **Complete Webhook Payload Sent to n8n:**
-```json
+\`\`\`json
 {
   "user": {
     "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -197,11 +197,11 @@ const webhookResult = await triggerWebhook(
   "requestId": 42,
   "timestamp": "2025-01-15T14:22:00.000Z"
 }
-```
+\`\`\`
 
 ---
 
-```typescript
+\`\`\`typescript
 // 7. RETURN RESPONSE TO FRONTEND (Lines 79-84)
 return NextResponse.json({
   success: true,
@@ -209,17 +209,17 @@ return NextResponse.json({
   webhookTriggered: webhookResult.success,  // true/false
   searchType: query ? "text" : "image",     // "text"
 })
-```
+\`\`\`
 
 **Frontend Receives:**
-```json
+\`\`\`json
 {
   "success": true,
   "requestId": 42,
   "webhookTriggered": true,
   "searchType": "text"
 }
-```
+\`\`\`
 
 ---
 
@@ -230,14 +230,14 @@ return NextResponse.json({
 **Workflow Steps:**
 
 #### 1. **Receive Webhook Trigger**
-```
+\`\`\`
 Webhook Node: "Album Create Request Received"
   - Method: POST
   - Receives payload with user, albumTitle, query, requestId
-```
+\`\`\`
 
 #### 2. **Perform Semantic Search**
-```
+\`\`\`
 Code/Function Node: "Search Photos by Query"
 
 Input:
@@ -269,12 +269,12 @@ Output:
     },
     ...
   ]
-```
+\`\`\`
 
 **💡 Options for Semantic Search:**
 
 **Option A: Using Vector Embeddings (Recommended)**
-```sql
+\`\`\`sql
 -- If you have embeddings stored
 SELECT
   id,
@@ -286,7 +286,7 @@ FROM photos
 WHERE user_id = $1
 ORDER BY embedding <=> query_embedding
 LIMIT 50;
-```
+\`\`\`
 
 **Option B: Using AI/LLM for Search**
 - Send query to OpenAI/Claude
@@ -294,7 +294,7 @@ LIMIT 50;
 - Return matching results
 
 **Option C: Simple Keyword Matching (Basic)**
-```sql
+\`\`\`sql
 -- Simple text search on caption and name
 SELECT id, file_url, name, caption
 FROM photos
@@ -305,23 +305,23 @@ WHERE user_id = $1
     OR name ILIKE '%sunset%'
   )
 LIMIT 50;
-```
+\`\`\`
 
 #### 3. **Store Results for Frontend to Fetch**
 
 You have several options:
 
 **Option A: Update the album record**
-```sql
+\`\`\`sql
 UPDATE albums
 SET
   photos = ARRAY['https://storage.../photo1.jpg', 'https://storage.../photo2.jpg'],
   processing_status = 'completed'
 WHERE id = $requestId;
-```
+\`\`\`
 
 **Option B: Create a separate results table**
-```sql
+\`\`\`sql
 CREATE TABLE album_search_results (
   request_id bigint PRIMARY KEY REFERENCES albums(id),
   results jsonb,  -- Store the array of matching photos
@@ -330,7 +330,7 @@ CREATE TABLE album_search_results (
 
 INSERT INTO album_search_results (request_id, results)
 VALUES ($requestId, $resultsJSON);
-```
+\`\`\`
 
 **Option C: Return results via webhook callback**
 - Trigger a callback to your app with results
@@ -338,18 +338,18 @@ VALUES ($requestId, $resultsJSON);
 - Use websockets for real-time updates
 
 #### 4. **Update Album Status**
-```sql
+\`\`\`sql
 UPDATE albums
 SET processing_status = 'completed'
 WHERE id = $requestId;
-```
+\`\`\`
 
 #### 5. **(Optional) Send Notification**
-```
+\`\`\`
 Email/Notification Node: "Notify User"
   - Subject: "Your album photos are ready!"
   - Body: "We found 24 photos matching your description"
-```
+\`\`\`
 
 ---
 
@@ -366,13 +366,13 @@ Email/Notification Node: "Notify User"
 - ✅ Shows count of selected photos
 
 **Mock Data (Lines 18-28):**
-```javascript
+\`\`\`javascript
 const suggestedPhotos = [
   { id: 1, url: "/beach-sunset-golden-hour.jpg", selected: true },
   { id: 2, url: "/family-beach-playing.jpg", selected: true },
   // ... hardcoded mock photos
 ]
-```
+\`\`\`
 
 ---
 
@@ -384,7 +384,7 @@ const suggestedPhotos = [
 
 Replace the mock data with actual API call:
 
-```typescript
+\`\`\`typescript
 // In create-album/page.tsx, after Step 1 completes:
 
 const [suggestedPhotos, setSuggestedPhotos] = useState([])
@@ -415,13 +415,13 @@ useEffect(() => {
     return () => clearInterval(interval)
   }
 }, [requestId, currentStep])
-```
+\`\`\`
 
 2. **Create API Endpoint to Fetch Results**
 
 Create: `app/api/albums/[requestId]/results/route.ts`
 
-```typescript
+\`\`\`typescript
 export async function GET(
   request: Request,
   { params }: { params: { requestId: string } }
@@ -453,7 +453,7 @@ export async function GET(
 
   return NextResponse.json({ status: "completed", photos })
 }
-```
+\`\`\`
 
 **OR**
 
@@ -461,7 +461,7 @@ export async function GET(
 
 Use Supabase Realtime to subscribe to album changes:
 
-```typescript
+\`\`\`typescript
 useEffect(() => {
   if (!requestId) return
 
@@ -488,7 +488,7 @@ useEffect(() => {
     supabase.removeChannel(channel)
   }
 }, [requestId])
-```
+\`\`\`
 
 ---
 
@@ -497,12 +497,12 @@ useEffect(() => {
 ### Frontend Action (app/create-album/page.tsx:75-78)
 
 **Current Implementation Issue:**
-```typescript
+\`\`\`typescript
 } else {
   // Create album
   window.location.href = "/dashboard"  // ❌ Just redirects, doesn't save!
 }
-```
+\`\`\`
 
 **❌ PROBLEM:** Step 3 currently does NOT call any API to save the album!
 
@@ -512,7 +512,7 @@ useEffect(() => {
 
 **You need to call the `album-finalized` endpoint:**
 
-```typescript
+\`\`\`typescript
 // In create-album/page.tsx, replace Step 3 logic:
 
 } else if (currentStep === 3) {
@@ -551,7 +551,7 @@ useEffect(() => {
     setIsProcessing(false)
   }
 }
-```
+\`\`\`
 
 ---
 
@@ -560,18 +560,18 @@ useEffect(() => {
 **What Happens:**
 
 #### 1. **Authentication** (Lines 9-17)
-```typescript
+\`\`\`typescript
 const { data: { user } } = await supabase.auth.getUser()
-```
+\`\`\`
 ✅ Verifies user is logged in
 
 #### 2. **Extract Request Data** (Lines 19-20)
-```typescript
+\`\`\`typescript
 const { title, description, selectedPhotos, coverImageUrl } = body
-```
+\`\`\`
 
 **Expected Input:**
-```json
+\`\`\`json
 {
   "title": "Summer Beach Trip",
   "description": "Photos from my beach vacation...",
@@ -589,10 +589,10 @@ const { title, description, selectedPhotos, coverImageUrl } = body
   ],
   "coverImageUrl": "https://storage.../photo1.jpg"
 }
-```
+\`\`\`
 
 #### 3. **Create Final Album Record** (Lines 22-35)
-```typescript
+\`\`\`typescript
 const { data: album } = await supabase
   .from("albums")
   .insert({
@@ -606,10 +606,10 @@ const { data: album } = await supabase
   })
   .select()
   .single()
-```
+\`\`\`
 
 **Database Record:**
-```json
+\`\`\`json
 {
   "id": 43,
   "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -621,10 +621,10 @@ const { data: album } = await supabase
   "processing_status": "completed",
   "created_at": "2025-01-15T14:30:00.000Z"
 }
-```
+\`\`\`
 
 #### 4. **Create Photo Records** (Lines 42-52)
-```typescript
+\`\`\`typescript
 const photoRecords = selectedPhotos.map((photo, index) => ({
   album_id: album.id,              // 43 (links to album)
   user_id: user.id,
@@ -635,10 +635,10 @@ const photoRecords = selectedPhotos.map((photo, index) => ({
 }))
 
 await supabase.from("photos").insert(photoRecords)
-```
+\`\`\`
 
 **Database Records (in photos table):**
-```json
+\`\`\`json
 [
   {
     "id": 789,
@@ -661,10 +661,10 @@ await supabase.from("photos").insert(photoRecords)
     "created_at": "2025-01-15T14:30:00.000Z"
   }
 ]
-```
+\`\`\`
 
 #### 5. **Trigger n8n Webhook** (Lines 58-64)
-```typescript
+\`\`\`typescript
 const webhookResult = await triggerWebhook(
   process.env.N8N_WEBHOOK_ALBUM_FINALIZED,
   {
@@ -675,10 +675,10 @@ const webhookResult = await triggerWebhook(
     timestamp: new Date().toISOString(),
   }
 )
-```
+\`\`\`
 
 **Webhook Payload to n8n:**
-```json
+\`\`\`json
 {
   "userId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "albumId": 43,
@@ -686,16 +686,16 @@ const webhookResult = await triggerWebhook(
   "photoCount": 12,
   "timestamp": "2025-01-15T14:30:00.000Z"
 }
-```
+\`\`\`
 
 #### 6. **Return Response** (Lines 66-70)
-```typescript
+\`\`\`typescript
 return NextResponse.json({
   success: true,
   albumId: album.id,
   webhookTriggered: webhookResult.success,
 })
-```
+\`\`\`
 
 ---
 
@@ -706,51 +706,51 @@ return NextResponse.json({
 **Workflow Steps:**
 
 #### 1. **Receive Webhook**
-```
+\`\`\`
 Webhook Node: "Album Finalized"
   - Receives: userId, albumId, title, photoCount
-```
+\`\`\`
 
 #### 2. **Post-Processing (Optional)**
 
 **Option A: Generate Thumbnails**
-```
+\`\`\`
 Code Node: "Generate Thumbnails"
   - Fetch all photos for album
   - Create thumbnail versions
   - Update thumbnail_url in photos table
-```
+\`\`\`
 
 **Option B: Extract Metadata**
-```
+\`\`\`
 Code Node: "Extract Photo Metadata"
   - Analyze photos with AI
   - Extract objects, faces, locations
   - Update metadata in photos table
-```
+\`\`\`
 
 **Option C: Create Sharing Link**
-```
+\`\`\`
 Code Node: "Generate Share Link"
   - Create public share token
   - Store in database
   - Return share URL
-```
+\`\`\`
 
 #### 3. **Send Notification**
-```
+\`\`\`
 Email Node: "Send Album Created Email"
   - To: user email
   - Subject: "Your album 'Summer Beach Trip' is ready!"
   - Include: Link to view album, photo count
-```
+\`\`\`
 
 #### 4. **Update Analytics**
-```
+\`\`\`
 Database Node: "Track Album Creation"
   - Log event: album_created
   - Track: user_id, album_id, photo_count
-```
+\`\`\`
 
 ---
 
@@ -758,7 +758,7 @@ Database Node: "Track Album Creation"
 
 ### Step 1: Find Photos
 
-```
+\`\`\`
 User Input:
   - albumTitle: "Summer Beach Trip"
   - query: "Photos from my beach vacation with palm trees and sunset"
@@ -785,11 +785,11 @@ n8n Should:
   2. Find 20-50 matching photos
   3. Store results in albums.photos array OR separate table
   4. Update processing_status to "completed"
-```
+\`\`\`
 
 ### Step 2: Review Results
 
-```
+\`\`\`
 Frontend Should:
   - Fetch results from database (albums.photos)
   - OR poll API endpoint for results
@@ -803,11 +803,11 @@ Current Issue:
 You Need To:
   ✅ Fetch real results from Step 1
   ✅ Display actual photos from user's collection
-```
+\`\`\`
 
 ### Step 3: Create Album
 
-```
+\`\`\`
 User Action:
   - Reviews and selects 12 photos
   - Clicks "Create Album"
@@ -846,7 +846,7 @@ n8n Should:
   1. (Optional) Generate thumbnails
   2. (Optional) Extract metadata
   3. Send success notification
-```
+\`\`\`
 
 ---
 

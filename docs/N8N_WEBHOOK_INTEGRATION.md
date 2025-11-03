@@ -16,28 +16,28 @@ The application uses n8n webhooks as orchestration points for two key functional
 Processes manually uploaded images, generates embeddings, and stores them for semantic search capabilities.
 
 ### Endpoint Configuration
-```bash
+\`\`\`bash
 N8N_WEBHOOK_MANUAL_IMAGE_UPLOAD=https://your-n8n-instance.com/webhook/manual-image-upload
-```
+\`\`\`
 
 ### API Endpoint
-```
+\`\`\`
 POST /api/photos/upload
-```
+\`\`\`
 
 ### Request Format (Client → API)
 **Content-Type:** `multipart/form-data`
 
-```typescript
+\`\`\`typescript
 FormData {
   files: File[]  // Array of image files
 }
-```
+\`\`\`
 
 ### Webhook Payload (API → n8n)
 **Content-Type:** `application/json`
 
-```json
+\`\`\`json
 {
   "user_id": "string",           // User UUID from Supabase auth
   "images": [
@@ -50,10 +50,10 @@ FormData {
   ],
   "timestamp": "string"          // ISO 8601 timestamp
 }
-```
+\`\`\`
 
 ### Example Payload
-```json
+\`\`\`json
 {
   "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "images": [
@@ -72,7 +72,7 @@ FormData {
   ],
   "timestamp": "2025-01-15T10:30:00.000Z"
 }
-```
+\`\`\`
 
 ### Validation Rules
 - **File Types:** `image/jpeg`, `image/jpg`, `image/png`, `image/webp`, `image/gif`
@@ -117,76 +117,76 @@ FormData {
 Performs semantic search across uploaded photos using either natural language queries or reference images.
 
 ### Endpoint Configuration
-```bash
+\`\`\`bash
 N8N_WEBHOOK_FIND_PHOTOS=https://your-n8n-instance.com/webhook/find-photos
-```
+\`\`\`
 
 ### API Endpoint
-```
+\`\`\`
 POST /api/webhooks/album-create-request
-```
+\`\`\`
 
 ### Request Format (Client → API)
 **Content-Type:** `application/json`
 
 #### Option A: Text Query
-```json
+\`\`\`json
 {
   "query": "string"  // Natural language description of desired photos
 }
-```
+\`\`\`
 
 #### Option B: Image-Based Search
-```json
+\`\`\`json
 {
   "image": "string"  // Base64 encoded reference image
 }
-```
+\`\`\`
 
 ### Webhook Payload (API → n8n)
 **Content-Type:** `application/json`
 
 #### Text Query Format
-```json
+\`\`\`json
 {
   "userId": "string",           // User UUID
   "requestId": number,          // Album request ID from database
   "query": "string",            // Natural language query
   "timestamp": "string"         // ISO 8601 timestamp
 }
-```
+\`\`\`
 
 #### Image Query Format
-```json
+\`\`\`json
 {
   "userId": "string",           // User UUID
   "requestId": number,          // Album request ID from database
   "image": "string",            // Base64 encoded reference image
   "timestamp": "string"         // ISO 8601 timestamp
 }
-```
+\`\`\`
 
 ### Example Payloads
 
 #### Text-Based Search
-```json
+\`\`\`json
 {
   "userId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "requestId": 42,
   "query": "sunset at the beach with palm trees",
   "timestamp": "2025-01-15T14:22:00.000Z"
 }
-```
+\`\`\`
 
 #### Image-Based Search
-```json
+\`\`\`json
 {
   "userId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "requestId": 43,
   "image": "/9j/4AAQSkZJRgABAQEAYABgAAD...",
   "timestamp": "2025-01-15T14:25:00.000Z"
 }
-```
+\`\`\`
 
 ### Validation Rules
 - **Required:** Either `query` OR `image` must be provided (not both)
@@ -223,7 +223,7 @@ The webhook should update the database directly or return results via a callback
 ## Database Schema Reference
 
 ### Photos Table
-```sql
+\`\`\`sql
 CREATE TABLE public.photos (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -235,10 +235,10 @@ CREATE TABLE public.photos (
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
   data TEXT                   -- Base64 encoded image data
 ) TABLESPACE pg_default;
-```
+\`\`\`
 
 ### Album Requests Table
-```sql
+\`\`\`sql
 CREATE TABLE public.album_requests (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL,
@@ -246,7 +246,7 @@ CREATE TABLE public.album_requests (
   processing_status TEXT DEFAULT 'pending',
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
 );
-```
+\`\`\`
 
 ---
 
@@ -286,14 +286,14 @@ CREATE TABLE public.album_requests (
    - HTTP Request to image embedding service
    - Generate image embedding
 5. **Supabase Query Node** - Vector similarity search
-   ```sql
+   \`\`\`sql
    SELECT id, name, file_url,
           1 - (embedding <=> $1) as similarity
    FROM photos
    WHERE user_id = $2
    ORDER BY embedding <=> $1
    LIMIT 20
-   ```
+   \`\`\`
 6. **Function Node** - Format results
 7. **Supabase Update Node** - Update album_requests status
 8. **Response Node** - Return results
@@ -308,32 +308,32 @@ CREATE TABLE public.album_requests (
 ## Testing Webhooks
 
 ### Test Manual Upload
-```bash
+\`\`\`bash
 curl -X POST https://your-app.com/api/photos/upload \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F "files=@/path/to/image1.jpg" \
   -F "files=@/path/to/image2.png"
-```
+\`\`\`
 
 ### Test Text Search
-```bash
+\`\`\`bash
 curl -X POST https://your-app.com/api/webhooks/album-create-request \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "query": "sunset at the beach"
   }'
-```
+\`\`\`
 
 ### Test Image Search
-```bash
+\`\`\`bash
 curl -X POST https://your-app.com/api/webhooks/album-create-request \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "image": "BASE64_ENCODED_IMAGE_STRING"
   }'
-```
+\`\`\`
 
 ---
 
@@ -431,7 +431,7 @@ curl -X POST https://your-app.com/api/webhooks/album-create-request \
 ### Updating from Old Webhook Format
 
 **Old Format (Deprecated):**
-```json
+\`\`\`json
 {
   "event": "photos_uploaded",
   "uploaded_files": [
@@ -441,10 +441,10 @@ curl -X POST https://your-app.com/api/webhooks/album-create-request \
     }
   ]
 }
-```
+\`\`\`
 
 **New Format (Current):**
-```json
+\`\`\`json
 {
   "user_id": "uuid",
   "images": [
@@ -456,7 +456,7 @@ curl -X POST https://your-app.com/api/webhooks/album-create-request \
     }
   ]
 }
-```
+\`\`\`
 
 ### Migration Steps:
 1. Update n8n workflows to accept new format

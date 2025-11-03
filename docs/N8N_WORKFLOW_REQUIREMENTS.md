@@ -23,7 +23,7 @@ You need to build **2 n8n workflows** for the Create Album feature:
 
 ### Input Payload Structure
 
-```json
+\`\`\`json
 {
   "user": {
     "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -34,7 +34,7 @@ You need to build **2 n8n workflows** for the Create Album feature:
   "requestId": 42,
   "timestamp": "2025-01-15T14:22:00.000Z"
 }
-```
+\`\`\`
 
 **Field Descriptions:**
 - `user.id` - UUID of the logged-in user (use this to filter photos)
@@ -49,12 +49,12 @@ You need to build **2 n8n workflows** for the Create Album feature:
 ### Workflow Logic
 
 #### **Node 1: Webhook Trigger**
-```
+\`\`\`
 Name: "Album Create Request"
 Type: Webhook
 Method: POST
 Path: /webhook/find-photos
-```
+\`\`\`
 
 ---
 
@@ -64,7 +64,7 @@ You have 3 implementation options:
 
 ##### **Option A: Vector Embeddings (Recommended for Production)**
 
-```
+\`\`\`
 Name: "Vector Search Photos"
 Type: Supabase Query / Function
 
@@ -92,13 +92,13 @@ Steps:
 1. Generate embedding for query text
 2. Compare with photo embeddings using cosine similarity
 3. Return top 50 matches ordered by relevance
-```
+\`\`\`
 
 ---
 
 ##### **Option B: AI-Powered Search (Good for MVP)**
 
-```
+\`\`\`
 Name: "AI Search Photos"
 Type: Code Node (JavaScript/Python)
 
@@ -126,13 +126,13 @@ const response = await openai.chat.completions.create({
 })
 
 return matchedPhotos
-```
+\`\`\`
 
 ---
 
 ##### **Option C: Simple Keyword Matching (Quick MVP)**
 
-```
+\`\`\`
 Name: "Keyword Search Photos"
 Type: Supabase Query
 
@@ -158,13 +158,13 @@ LIMIT 50;
 Parameters:
   - $userId: {{ $json.user.id }}
   - $keyword1, $keyword2: Extract from query (beach, sunset, palm, vacation)
-```
+\`\`\`
 
 ---
 
 #### **Node 3: Format Results**
 
-```
+\`\`\`
 Name: "Format Photo Results"
 Type: Code Node
 
@@ -180,7 +180,7 @@ return $input.all().map(photo => ({
   type: photo.type,
   size: photo.size
 }))
-```
+\`\`\`
 
 ---
 
@@ -188,7 +188,7 @@ return $input.all().map(photo => ({
 
 ##### **Option A: Update albums.photos array**
 
-```
+\`\`\`
 Name: "Update Album with Results"
 Type: Supabase Update
 
@@ -200,11 +200,11 @@ Update:
   "photos": {{ JSON.stringify($node["Format Photo Results"].json.map(p => p.file_url)) }},
   "processing_status": "completed"
 }
-```
+\`\`\`
 
 ##### **Option B: Create separate results table**
 
-```
+\`\`\`
 Name: "Store Search Results"
 Type: Supabase Insert
 
@@ -221,20 +221,20 @@ Then update album status:
 UPDATE albums
 SET processing_status = 'completed'
 WHERE id = {{ $json.requestId }};
-```
+\`\`\`
 
 ---
 
 #### **Node 5: (Optional) Send Notification**
 
-```
+\`\`\`
 Name: "Notify User"
 Type: Email / Webhook
 
 To: {{ $json.user.email }}
 Subject: "Your album photos are ready!"
 Body: "We found {{ $node["Format Photo Results"].json.length }} photos matching '{{ $json.query }}'"
-```
+\`\`\`
 
 ---
 
@@ -252,7 +252,7 @@ The workflow should:
 ### Testing the Workflow
 
 **Test Payload:**
-```bash
+\`\`\`bash
 curl -X POST https://your-n8n.com/webhook/find-photos \
   -H "Content-Type: application/json" \
   -d '{
@@ -265,10 +265,10 @@ curl -X POST https://your-n8n.com/webhook/find-photos \
     "requestId": 1,
     "timestamp": "2025-01-15T14:22:00.000Z"
   }'
-```
+\`\`\`
 
 **Expected Database Changes:**
-```sql
+\`\`\`sql
 -- Check album was updated
 SELECT id, processing_status, photos
 FROM albums
@@ -277,7 +277,7 @@ WHERE id = 1;
 -- Should return:
 -- processing_status = 'completed'
 -- photos = ['url1', 'url2', ...]
-```
+\`\`\`
 
 ---
 
@@ -293,7 +293,7 @@ WHERE id = 1;
 
 ### Input Payload Structure
 
-```json
+\`\`\`json
 {
   "userId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "albumId": 43,
@@ -301,7 +301,7 @@ WHERE id = 1;
   "photoCount": 12,
   "timestamp": "2025-01-15T14:30:00.000Z"
 }
-```
+\`\`\`
 
 **Field Descriptions:**
 - `userId` - UUID of user who created album
@@ -315,18 +315,18 @@ WHERE id = 1;
 ### Workflow Logic
 
 #### **Node 1: Webhook Trigger**
-```
+\`\`\`
 Name: "Album Finalized"
 Type: Webhook
 Method: POST
 Path: /webhook/album-finalized
-```
+\`\`\`
 
 ---
 
 #### **Node 2: Fetch Album Photos**
 
-```
+\`\`\`
 Name: "Get Album Photos"
 Type: Supabase Query
 
@@ -343,13 +343,13 @@ ORDER BY position ASC;
 
 Parameters:
   - $albumId: {{ $json.albumId }}
-```
+\`\`\`
 
 ---
 
 #### **Node 3: Generate Thumbnails (Optional)**
 
-```
+\`\`\`
 Name: "Generate Thumbnails"
 Type: Code Node / HTTP Request
 
@@ -384,13 +384,13 @@ for (const photo of photos) {
     .update({ thumbnail_url: thumbnailUrl })
     .eq('id', photo.id)
 }
-```
+\`\`\`
 
 ---
 
 #### **Node 4: Extract Metadata with AI (Optional)**
 
-```
+\`\`\`
 Name: "Analyze Photos with AI"
 Type: HTTP Request / Code
 
@@ -430,13 +430,13 @@ await supabase
     }
   })
   .eq('id', photo.id)
-```
+\`\`\`
 
 ---
 
 #### **Node 5: Send Success Notification (Optional)**
 
-```
+\`\`\`
 Name: "Send Email Notification"
 Type: Email / SendGrid / Resend
 
@@ -452,13 +452,13 @@ Body:
 
   Happy organizing!
   - FindMyPhoto Team
-```
+\`\`\`
 
 ---
 
 #### **Node 6: Update Analytics (Optional)**
 
-```
+\`\`\`
 Name: "Track Album Creation"
 Type: Supabase Insert / Analytics Service
 
@@ -472,7 +472,7 @@ Insert:
   "photo_count": {{ $json.photoCount }},
   "timestamp": {{ $json.timestamp }}
 }
-```
+\`\`\`
 
 ---
 
@@ -490,7 +490,7 @@ The workflow should:
 ### Testing the Workflow
 
 **Test Payload:**
-```bash
+\`\`\`bash
 curl -X POST https://your-n8n.com/webhook/album-finalized \
   -H "Content-Type: application/json" \
   -d '{
@@ -500,7 +500,7 @@ curl -X POST https://your-n8n.com/webhook/album-finalized \
     "photoCount": 5,
     "timestamp": "2025-01-15T14:30:00.000Z"
   }'
-```
+\`\`\`
 
 **Expected Results:**
 - ✅ Thumbnails created for all photos in album
@@ -549,7 +549,7 @@ curl -X POST https://your-n8n.com/webhook/album-finalized \
 
 Add these to your n8n environment or workflow settings:
 
-```bash
+\`\`\`bash
 # Supabase Connection
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your-service-role-key
@@ -561,43 +561,43 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Email Service (Optional)
 SENDGRID_API_KEY=SG.xxx
 RESEND_API_KEY=re_xxx
-```
+\`\`\`
 
 ---
 
 ## 📊 Database Queries Reference
 
 ### Fetch User's Photos
-```sql
+\`\`\`sql
 SELECT id, name, file_url, caption, type, size, embedding
 FROM photos
 WHERE user_id = $1
 ORDER BY created_at DESC;
-```
+\`\`\`
 
 ### Update Album with Results
-```sql
+\`\`\`sql
 UPDATE albums
 SET
   photos = $1,  -- Array of file URLs
   processing_status = 'completed'
 WHERE id = $2;
-```
+\`\`\`
 
 ### Fetch Album Photos
-```sql
+\`\`\`sql
 SELECT id, file_url, name, caption
 FROM photos
 WHERE album_id = $1
 ORDER BY position ASC;
-```
+\`\`\`
 
 ### Update Photo Thumbnail
-```sql
+\`\`\`sql
 UPDATE photos
 SET thumbnail_url = $1
 WHERE id = $2;
-```
+\`\`\`
 
 ---
 
@@ -664,7 +664,7 @@ Common issues:
 ## 🚀 Quick Start Commands
 
 ### Test Workflow 1
-```bash
+\`\`\`bash
 # Replace with your actual values
 curl -X POST https://your-n8n.com/webhook/find-photos \
   -H "Content-Type: application/json" \
@@ -673,10 +673,10 @@ curl -X POST https://your-n8n.com/webhook/find-photos \
     "query": "beach photos",
     "requestId": 1
   }'
-```
+\`\`\`
 
 ### Test Workflow 2
-```bash
+\`\`\`bash
 curl -X POST https://your-n8n.com/webhook/album-finalized \
   -H "Content-Type: application/json" \
   -d '{
@@ -685,7 +685,7 @@ curl -X POST https://your-n8n.com/webhook/album-finalized \
     "title": "Test Album",
     "photoCount": 5
   }'
-```
+\`\`\`
 
 ---
 

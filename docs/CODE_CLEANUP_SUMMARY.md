@@ -7,7 +7,7 @@
 **File:** `app/api/webhooks/photos-uploaded/route.ts`
 
 **What Was Removed:**
-```typescript
+\`\`\`typescript
 // ❌ REMOVED - Database insertion (now handled by n8n)
 const { error: dbError } = await supabase.from("photos").insert({
   user_id: user.id,
@@ -24,7 +24,7 @@ const { error: dbError } = await supabase.from("photos").insert({
     uploaded_at: new Date().toISOString(),
   },
 })
-```
+\`\`\`
 
 **Current Behavior:**
 - ✅ Uploads files to Supabase Storage (`photos` bucket)
@@ -34,7 +34,7 @@ const { error: dbError } = await supabase.from("photos").insert({
 - ✅ Cleaner separation of concerns
 
 **n8n Webhook Payload:**
-```json
+\`\`\`json
 {
   "event": "photos_uploaded",
   "user_id": "uuid",
@@ -51,7 +51,7 @@ const { error: dbError } = await supabase.from("photos").insert({
   ],
   "timestamp": "2025-01-15T14:22:00.000Z"
 }
-```
+\`\`\`
 
 **Your n8n workflow should:**
 1. Receive the `photos_uploaded` webhook
@@ -79,7 +79,7 @@ const { error: dbError } = await supabase.from("photos").insert({
   - Extracts data from `raw_user_meta_data`
 
 **Migration Script Handles This:**
-```sql
+\`\`\`sql
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -97,7 +97,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
-```
+\`\`\`
 
 **What This Means:**
 - ✅ User signs up via Supabase Auth
@@ -146,32 +146,32 @@ If you don't need custom onboarding:
 ### Photo Upload Flow
 
 **Before:**
-```
+\`\`\`
 Frontend → API → Supabase Storage ✅
                 → Supabase DB ✅
                 → n8n webhook ✅
-```
+\`\`\`
 
 **After (Cleaner):**
-```
+\`\`\`
 Frontend → API → Supabase Storage ✅
                 → n8n webhook ✅
                      ↓
                   n8n handles DB insertion ✅
-```
+\`\`\`
 
 ### User Registration Flow
 
 **Before:**
-```
+\`\`\`
 Supabase Auth → Frontend → /api/webhooks/user-registered → profiles table
                                                            → n8n webhook
-```
+\`\`\`
 
 **After (Automated):**
-```
+\`\`\`
 Supabase Auth → Database Trigger → profiles table (automatic)
-```
+\`\`\`
 
 ---
 
@@ -179,7 +179,7 @@ Supabase Auth → Database Trigger → profiles table (automatic)
 
 Make sure these are configured in your `.env.local`:
 
-```bash
+\`\`\`bash
 # Required for manual photo upload
 N8N_WEBHOOK_PHOTO_SOURCE_CONNECTED=https://your-n8n.com/webhook/photos-uploaded
 
@@ -194,7 +194,7 @@ N8N_WEBHOOK_ONBOARDING_COMPLETED=https://your-n8n.com/webhook/onboarding-complet
 
 # Removed - no longer needed
 # N8N_WEBHOOK_USER_REGISTERED (not used anymore)
-```
+\`\`\`
 
 ---
 

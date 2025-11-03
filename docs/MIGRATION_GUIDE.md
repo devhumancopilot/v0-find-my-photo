@@ -43,20 +43,20 @@ This guide will help you migrate your FindMyPhoto database from the basic schema
 
 Before running any migration, **backup your data**:
 
-```bash
+\`\`\`bash
 # Using Supabase CLI
 supabase db dump > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # Or from Supabase Dashboard:
 # Settings > Database > Database Backups > Create Backup
-```
+\`\`\`
 
 ### Step 2: Run the Migration Script
 
 The migration script is located at:
-```
+\`\`\`
 migrations/001_extend_schema_for_multi_user.sql
-```
+\`\`\`
 
 **Option A: Run via Supabase Dashboard (Recommended)**
 
@@ -69,11 +69,11 @@ migrations/001_extend_schema_for_multi_user.sql
 
 **Option B: Run via Supabase CLI**
 
-```bash
+\`\`\`bash
 supabase db push --db-url "your_database_url"
 # Or
 psql -h your_host -U postgres -d postgres -f migrations/001_extend_schema_for_multi_user.sql
-```
+\`\`\`
 
 ### Step 3: Backfill Existing Data (IMPORTANT!)
 
@@ -81,10 +81,10 @@ If you have existing albums or photos, you **must** assign them to a user before
 
 **Find your user ID:**
 
-```sql
+\`\`\`sql
 -- List all users
 SELECT id, email FROM auth.users;
-```
+\`\`\`
 
 **Choose ONE option:**
 
@@ -92,7 +92,7 @@ SELECT id, email FROM auth.users;
 
 Edit the migration script and uncomment these lines (around line 175):
 
-```sql
+\`\`\`sql
 UPDATE public.albums
 SET user_id = 'YOUR_USER_UUID_HERE'::uuid
 WHERE user_id IS NULL;
@@ -100,34 +100,34 @@ WHERE user_id IS NULL;
 UPDATE public.photos
 SET user_id = 'YOUR_USER_UUID_HERE'::uuid
 WHERE user_id IS NULL;
-```
+\`\`\`
 
 Replace `YOUR_USER_UUID_HERE` with your actual user UUID, then run:
 
-```sql
+\`\`\`sql
 -- Make user_id required
 ALTER TABLE public.albums ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE public.photos ALTER COLUMN user_id SET NOT NULL;
-```
+\`\`\`
 
 **Option B: Delete orphaned data (use with caution!)**
 
 If you want to start fresh:
 
-```sql
+\`\`\`sql
 DELETE FROM public.albums WHERE user_id IS NULL;
 DELETE FROM public.photos WHERE user_id IS NULL;
 
 -- Then make user_id required
 ALTER TABLE public.albums ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE public.photos ALTER COLUMN user_id SET NOT NULL;
-```
+\`\`\`
 
 ### Step 4: Verify the Migration
 
 Run these queries to verify everything is working:
 
-```sql
+\`\`\`sql
 -- Check albums table structure
 SELECT column_name, data_type, is_nullable
 FROM information_schema.columns
@@ -147,14 +147,14 @@ WHERE schemaname = 'public';
 SELECT * FROM albums LIMIT 5;
 SELECT * FROM photos LIMIT 5;
 SELECT * FROM profiles LIMIT 5;
-```
+\`\`\`
 
 ### Step 5: Test Your Application
 
 1. **Start your development server:**
-   ```bash
+   \`\`\`bash
    npm run dev
-   ```
+   \`\`\`
 
 2. **Test authentication:**
    - Sign in with your account
@@ -245,7 +245,7 @@ The migration automatically creates these policies:
 
 ### Test User Isolation
 
-```sql
+\`\`\`sql
 -- As User A (replace with your UUID)
 SET request.jwt.claims TO '{"sub": "user-a-uuid"}';
 
@@ -265,7 +265,7 @@ VALUES ('user-b-uuid'::uuid, 'User B Album', 'active');
 
 -- Should only see User B's album
 SELECT * FROM albums;
-```
+\`\`\`
 
 ---
 
@@ -275,7 +275,7 @@ Your n8n workflows now receive this payload structure:
 
 ### Step 1: Find Photos Webhook
 
-```json
+\`\`\`json
 {
   "user": {
     "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -286,11 +286,11 @@ Your n8n workflows now receive this payload structure:
   "requestId": 42,
   "timestamp": "2025-01-15T14:22:00.000Z"
 }
-```
+\`\`\`
 
 ### Step 3: Album Finalized Webhook
 
-```json
+\`\`\`json
 {
   "userId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "albumId": 15,
@@ -298,7 +298,7 @@ Your n8n workflows now receive this payload structure:
   "photoCount": 12,
   "timestamp": "2025-01-15T14:30:00.000Z"
 }
-```
+\`\`\`
 
 **Update your n8n workflows to:**
 1. Extract `user.id` and `user.email` instead of just `userId`
@@ -314,7 +314,7 @@ Your n8n workflows now receive this payload structure:
 **Cause:** RLS policies are blocking access
 
 **Solution:**
-```sql
+\`\`\`sql
 -- Check if RLS is enabled
 SELECT tablename, rowsecurity FROM pg_tables
 WHERE schemaname = 'public' AND tablename IN ('albums', 'photos');
@@ -324,28 +324,28 @@ SELECT * FROM pg_policies WHERE tablename = 'albums';
 
 -- Temporarily disable RLS for testing (NOT for production!)
 ALTER TABLE albums DISABLE ROW LEVEL SECURITY;
-```
+\`\`\`
 
 ### Issue: "null value in column 'user_id' violates not-null constraint"
 
 **Cause:** Trying to insert without user_id, or user_id is null
 
 **Solution:**
-```sql
+\`\`\`sql
 -- Make user_id nullable temporarily
 ALTER TABLE albums ALTER COLUMN user_id DROP NOT NULL;
 
 -- Fix your code to always include user_id in INSERT
 -- Then make it NOT NULL again
 ALTER TABLE albums ALTER COLUMN user_id SET NOT NULL;
-```
+\`\`\`
 
 ### Issue: "relation 'profiles' does not exist"
 
 **Cause:** Migration didn't run completely
 
 **Solution:**
-```sql
+\`\`\`sql
 -- Manually create profiles table
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -355,7 +355,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now()
 );
-```
+\`\`\`
 
 ### Issue: Photos not showing in dashboard
 
@@ -367,10 +367,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 3. Check browser console for errors
 4. Test query manually:
 
-```sql
+\`\`\`sql
 -- As authenticated user
 SELECT * FROM photos WHERE user_id = auth.uid();
-```
+\`\`\`
 
 ---
 
@@ -378,7 +378,7 @@ SELECT * FROM photos WHERE user_id = auth.uid();
 
 ### Complete Albums Table Schema
 
-```sql
+\`\`\`sql
 CREATE TABLE public.albums (
   id bigint PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -392,11 +392,11 @@ CREATE TABLE public.albums (
   processing_status text DEFAULT 'completed' CHECK (processing_status IN ('pending', 'processing', 'completed', 'failed')),
   updated_at timestamptz DEFAULT now()
 );
-```
+\`\`\`
 
 ### Complete Photos Table Schema
 
-```sql
+\`\`\`sql
 CREATE TABLE public.photos (
   id bigserial PRIMARY KEY,
   name text NOT NULL,
@@ -414,7 +414,7 @@ CREATE TABLE public.photos (
   thumbnail_url text,
   updated_at timestamptz DEFAULT now()
 );
-```
+\`\`\`
 
 ---
 
@@ -422,16 +422,16 @@ CREATE TABLE public.photos (
 
 If something goes wrong, you can rollback using the script at the bottom of the migration file:
 
-```sql
+\`\`\`sql
 -- Uncomment the rollback section in 001_extend_schema_for_multi_user.sql
 -- Then run it in SQL Editor
-```
+\`\`\`
 
 Or restore from your backup:
 
-```bash
+\`\`\`bash
 psql -h your_host -U postgres -d postgres < backup_file.sql
-```
+\`\`\`
 
 ---
 

@@ -69,19 +69,19 @@ This guide will get you up and running with Google Photos integration in **under
 
 Open `.env.local` and add:
 
-```env
+\`\`\`env
 # Google Photos Picker API Configuration
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=paste-your-client-id-here
 GOOGLE_CLIENT_SECRET=paste-your-client-secret-here
 NEXT_PUBLIC_GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
-```
+\`\`\`
 
 ## Step 4: Restart Development Server (1 minute)
 
-```bash
+\`\`\`bash
 # Stop the server (Ctrl+C)
 npm run dev
-```
+\`\`\`
 
 ## Step 5: Test the Integration (5 minutes)
 
@@ -123,9 +123,9 @@ npm run dev
 
 ### "redirect_uri_mismatch" error
 **Solution:** In Google Cloud Console, verify redirect URI is exactly:
-```
+\`\`\`
 http://localhost:3000/api/auth/google/callback
-```
+\`\`\`
 (No trailing slash, exact URL)
 
 ### Popup blocked
@@ -157,9 +157,9 @@ When deploying to production:
    - Authorized redirect URIs: `https://yourdomain.com/api/auth/google/callback`
 
 2. Update environment variables:
-   ```env
+   \`\`\`env
    NEXT_PUBLIC_GOOGLE_REDIRECT_URI=https://yourdomain.com/api/auth/google/callback
-   ```
+   \`\`\`
 
 3. Publish OAuth app (for public access):
    - Go to OAuth consent screen
