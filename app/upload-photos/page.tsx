@@ -57,7 +57,22 @@ export default function UploadPhotosPage() {
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
-    const newImages = files.map((file) => ({
+    // Filter only image files (in case folder contains non-images)
+    const imageFiles = files.filter(file => file.type.startsWith('image/'))
+    const newImages = imageFiles.map((file) => ({
+      id: Math.random().toString(36).substring(7),
+      file,
+      preview: URL.createObjectURL(file),
+      source: 'manual' as const,
+    }))
+    setUploadedImages([...uploadedImages, ...newImages])
+  }
+
+  const handleFolderSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    // Filter only image files from the folder
+    const imageFiles = files.filter(file => file.type.startsWith('image/'))
+    const newImages = imageFiles.map((file) => ({
       id: Math.random().toString(36).substring(7),
       file,
       preview: URL.createObjectURL(file),
@@ -284,29 +299,58 @@ export default function UploadPhotosPage() {
                 </CardHeader>
                 <CardContent>
                   {!isUploading && (
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleFileSelect}
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        disabled={isUploading}
-                      />
-                      <div className="flex min-h-[200px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/20 p-6 text-center transition-colors hover:border-muted-foreground/50 hover:bg-muted/30">
-                        <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
-                        <p className="mb-1 text-base font-medium text-foreground">
-                          Click to upload
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          JPG, PNG, WEBP
-                        </p>
-                        {uploadedImages.length > 0 && (
-                          <p className="mt-3 text-sm font-semibold text-blue-600">
+                    <div className="space-y-4">
+                      {/* Select Individual Files */}
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleFileSelect}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          disabled={isUploading}
+                        />
+                        <div className="flex min-h-[120px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/20 p-4 text-center transition-colors hover:border-muted-foreground/50 hover:bg-muted/30">
+                          <Upload className="mb-2 h-8 w-8 text-muted-foreground" />
+                          <p className="mb-1 text-sm font-medium text-foreground">
+                            Select Photos
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Choose multiple photos
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Select Entire Folder/Album */}
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          // @ts-ignore - webkitdirectory is not in TypeScript types but works in browsers
+                          webkitdirectory="true"
+                          directory="true"
+                          onChange={handleFolderSelect}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          disabled={isUploading}
+                        />
+                        <div className="flex min-h-[120px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-purple-300/50 bg-purple-50/30 p-4 text-center transition-colors hover:border-purple-400/70 hover:bg-purple-50/50">
+                          <ImageIcon className="mb-2 h-8 w-8 text-purple-600" />
+                          <p className="mb-1 text-sm font-medium text-foreground">
+                            Select Folder (Select All)
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Upload entire album at once
+                          </p>
+                        </div>
+                      </div>
+
+                      {uploadedImages.length > 0 && (
+                        <div className="rounded-lg bg-blue-50 p-3 text-center">
+                          <p className="text-sm font-semibold text-blue-600">
                             {uploadedImages.length} photo{uploadedImages.length !== 1 ? "s" : ""} selected
                           </p>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -506,6 +550,7 @@ export default function UploadPhotosPage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>• Photos are securely stored in your personal collection</p>
+            <p>• Select individual photos or choose an entire folder to upload all at once</p>
             <p>• Import photos from Google Photos or upload from your device</p>
             <p>• AI analyzes each photo for semantic search capabilities</p>
             <p>• Use natural language to find and create albums from your photos</p>
