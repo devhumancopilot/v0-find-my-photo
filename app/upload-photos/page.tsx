@@ -25,6 +25,16 @@ interface GooglePhoto {
   source: 'google_photos'
 }
 
+// Browser-compatible base64 encoding function
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
+
 export default function UploadPhotosPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -97,7 +107,8 @@ export default function UploadPhotosPage() {
       if (uploadedImages.length > 0) {
         for (const image of uploadedImages) {
           const fileBuffer = await image.file.arrayBuffer()
-          const base64Data = Buffer.from(fileBuffer).toString("base64")
+          // Use browser-compatible base64 encoding instead of Node.js Buffer
+          const base64Data = arrayBufferToBase64(fileBuffer)
 
           const payload = {
             name: image.file.name,
@@ -137,7 +148,8 @@ export default function UploadPhotosPage() {
             }
 
             const imageBuffer = await imageResponse.arrayBuffer()
-            const base64Data = Buffer.from(imageBuffer).toString("base64")
+            // Use browser-compatible base64 encoding instead of Node.js Buffer
+            const base64Data = arrayBufferToBase64(imageBuffer)
 
             const payload = {
               name: photo.filename || `google-photo-${photo.id}.jpg`,
