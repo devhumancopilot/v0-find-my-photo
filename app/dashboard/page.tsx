@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, User, FolderOpen, Upload } from "lucide-react"
+import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, FolderOpen, Upload } from "lucide-react"
 import { PhotoGallery } from "@/components/photo-gallery"
 import { LogoutButton } from "@/components/logout-button"
 import { FaceProfilesSection } from "@/components/face-profiles-section"
@@ -129,14 +129,12 @@ export default async function DashboardPage() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
+                <Link href="/settings">
+                  <DropdownMenuItem>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </DropdownMenuItem>
+                </Link>
                 <DropdownMenuSeparator />
                 <LogoutButton />
               </DropdownMenuContent>
