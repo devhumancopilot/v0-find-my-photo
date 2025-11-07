@@ -15,6 +15,7 @@ import {
 import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, User, FolderOpen, Upload } from "lucide-react"
 import { PhotoGallery } from "@/components/photo-gallery"
 import { LogoutButton } from "@/components/logout-button"
+import { FaceProfilesSection } from "@/components/face-profiles-section"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -79,6 +80,9 @@ export default async function DashboardPage() {
     { label: "Total Photos", value: String(photoCount || 0), icon: ImageIcon },
     { label: "Favorites", value: "0", icon: Heart },
   ]
+
+  // Check if face detection is enabled
+  const isFaceDetectionEnabled = process.env.ENABLE_FACE_DETECTION === "true"
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -165,6 +169,17 @@ export default async function DashboardPage() {
             </Card>
           ))}
         </div>
+
+        {/* Face Profiles Section - Only show if face detection is enabled */}
+        {isFaceDetectionEnabled && (
+          <div className="mb-8">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-foreground">Face Recognition</h2>
+              <p className="text-sm text-muted-foreground">People detected in your photos</p>
+            </div>
+            <FaceProfilesSection />
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="mb-8 grid gap-4 md:grid-cols-2">

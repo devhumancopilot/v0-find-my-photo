@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Sparkles, Upload, X, ImageIcon, Check, ArrowLeft, Image as ImageIconLucide, CheckCircle } from "lucide-react"
 import { GooglePhotosPicker } from "@/components/google-photos-picker"
+import { toast } from "sonner"
 
 interface UploadedImage {
   id: string
@@ -44,6 +45,7 @@ export default function UploadPhotosPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadComplete, setUploadComplete] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   // Check for OAuth callback success
   useEffect(() => {
@@ -54,6 +56,38 @@ export default function UploadPhotosPage() {
       window.history.replaceState({}, '', '/upload-photos')
     }
   }, [searchParams])
+
+  // Load persisted photos from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const savedCount = sessionStorage.getItem('pendingUploadCount')
+      if (savedCount) {
+        const count = parseInt(savedCount, 10)
+        if (count > 0) {
+          toast.info(`You have ${count} photo${count !== 1 ? 's' : ''} ready to upload`, {
+            description: 'Continue adding more or click "Upload All Photos" when ready',
+            duration: 5000,
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load persisted upload data:', error)
+    }
+  }, [])
+
+  // Persist photo count to sessionStorage whenever it changes
+  useEffect(() => {
+    try {
+      const totalCount = uploadedImages.length + googlePhotos.length
+      if (totalCount > 0) {
+        sessionStorage.setItem('pendingUploadCount', totalCount.toString())
+      } else {
+        sessionStorage.removeItem('pendingUploadCount')
+      }
+    } catch (error) {
+      console.error('Failed to persist upload data:', error)
+    }
+  }, [uploadedImages.length, googlePhotos.length])
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
@@ -89,6 +123,88 @@ export default function UploadPhotosPage() {
     setGooglePhotos(newGooglePhotos)
   }, [])
 
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only set dragging to false if we're leaving the main container
+    if (e.currentTarget === e.target) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const items = Array.from(e.dataTransfer.items)
+    const files: File[] = []
+
+    // Process dropped items
+    const processItems = async () => {
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const entry = item.webkitGetAsEntry()
+          if (entry) {
+            await traverseFileTree(entry, files)
+          }
+        }
+      }
+
+      // Filter only image files
+      const imageFiles = files.filter(file => file.type.startsWith('image/'))
+
+      if (imageFiles.length > 0) {
+        const newImages = imageFiles.map((file) => ({
+          id: Math.random().toString(36).substring(7),
+          file,
+          preview: URL.createObjectURL(file),
+          source: 'manual' as const,
+        }))
+        setUploadedImages([...uploadedImages, ...newImages])
+        toast.success(`Added ${imageFiles.length} photo${imageFiles.length !== 1 ? 's' : ''}`)
+      } else {
+        toast.error('No image files found in the dropped items')
+      }
+    }
+
+    processItems()
+  }
+
+  // Recursive function to traverse file tree (handles folders)
+  const traverseFileTree = async (item: any, files: File[]): Promise<void> => {
+    return new Promise((resolve) => {
+      if (item.isFile) {
+        item.file((file: File) => {
+          files.push(file)
+          resolve()
+        })
+      } else if (item.isDirectory) {
+        const dirReader = item.createReader()
+        dirReader.readEntries(async (entries: any[]) => {
+          for (const entry of entries) {
+            await traverseFileTree(entry, files)
+          }
+          resolve()
+        })
+      } else {
+        resolve()
+      }
+    })
+  }
+
   const removeImage = (id: string) => {
     const image = uploadedImages.find((img) => img.id === id)
     if (image) {
@@ -110,7 +226,7 @@ export default function UploadPhotosPage() {
     setUploadProgress(0)
 
     try {
-      let uploadedCount = 0
+      let processedCount = 0
       const allPayloads: Array<{
         name: string
         data: string
@@ -118,6 +234,7 @@ export default function UploadPhotosPage() {
         size: number
       }> = []
 
+      // Phase 1: Converting images (0-70%)
       // Convert manual files to base64 payloads
       if (uploadedImages.length > 0) {
         for (const image of uploadedImages) {
@@ -141,8 +258,9 @@ export default function UploadPhotosPage() {
 
           allPayloads.push(payload)
 
-          uploadedCount++
-          setUploadProgress((uploadedCount / totalPhotos) * 100)
+          processedCount++
+          // Update progress gradually from 0-70% during conversion
+          setUploadProgress((processedCount / totalPhotos) * 70)
         }
       }
 
@@ -182,14 +300,18 @@ export default function UploadPhotosPage() {
 
             allPayloads.push(payload)
 
-            uploadedCount++
-            setUploadProgress((uploadedCount / totalPhotos) * 100)
+            processedCount++
+            // Update progress gradually from 0-70% during conversion
+            setUploadProgress((processedCount / totalPhotos) * 70)
           } catch (error) {
             console.error(`Error processing Google Photo ${photo.id}:`, error)
             // Continue with other photos
           }
         }
       }
+
+      // Phase 2: Uploading to server (70-90%)
+      setUploadProgress(75)
 
       // Send all photos through the webhook
       if (allPayloads.length > 0) {
@@ -206,6 +328,8 @@ export default function UploadPhotosPage() {
           })),
         })
 
+        setUploadProgress(80)
+
         const response = await fetch("/api/webhooks/photos-upload", {
           method: "POST",
           headers: {
@@ -216,6 +340,8 @@ export default function UploadPhotosPage() {
           }),
         })
 
+        setUploadProgress(90)
+
         if (!response.ok) {
           const errorText = await response.text()
           console.error("Upload failed:", response.status, errorText)
@@ -224,6 +350,17 @@ export default function UploadPhotosPage() {
 
         const result = await response.json()
         console.log("Upload successful:", result)
+
+        // Show duplicate notification if any
+        if (result.duplicate_count && result.duplicate_count > 0) {
+          toast.warning("Duplicate Photos Detected", {
+            description: `${result.duplicate_count} photo${result.duplicate_count !== 1 ? "s were" : " was"} already in your library and skipped.`,
+            duration: 5000,
+          })
+        }
+
+        // Phase 3: Finalizing (90-100%)
+        setUploadProgress(95)
       }
 
       // Clean up object URLs
@@ -231,15 +368,40 @@ export default function UploadPhotosPage() {
         URL.revokeObjectURL(image.preview)
       })
 
+      // Clear session storage
+      sessionStorage.removeItem('pendingUploadCount')
+
+      // Complete!
+      setUploadProgress(100)
       setUploadComplete(true)
 
-      // Redirect to dashboard after 2 seconds
+      // Calculate actual uploaded count
+      const actualUploaded = result.processed_count || allPayloads.length
+      const duplicateCount = result.duplicate_count || 0
+
+      // Show success toast
+      if (actualUploaded > 0) {
+        toast.success("Upload Complete!", {
+          description: `Successfully uploaded ${actualUploaded} photo${actualUploaded !== 1 ? "s" : ""}. Your photos are now being processed.${duplicateCount > 0 ? ` (${duplicateCount} duplicate${duplicateCount !== 1 ? "s" : ""} skipped)` : ""}`,
+          duration: 5000,
+        })
+      } else if (duplicateCount > 0) {
+        toast.info("No New Photos", {
+          description: `All ${duplicateCount} photo${duplicateCount !== 1 ? "s were" : " was"} already in your library.`,
+          duration: 5000,
+        })
+      }
+
+      // Redirect to dashboard after 3 seconds
       setTimeout(() => {
         router.push("/dashboard")
-      }, 2000)
+      }, 3000)
     } catch (error) {
       console.error("Upload error:", error)
-      alert("Failed to upload photos. Please try again.")
+      toast.error("Upload Failed", {
+        description: error instanceof Error ? error.message : "Failed to upload photos. Please try again.",
+        duration: 5000,
+      })
       setIsUploading(false)
       setUploadProgress(0)
     }
@@ -284,8 +446,25 @@ export default function UploadPhotosPage() {
 
         {!uploadComplete ? (
           <div className="space-y-6">
+            {/* Drag and Drop Overlay */}
+            {isDragging && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500/20 backdrop-blur-sm">
+                <div className="rounded-2xl border-4 border-dashed border-blue-500 bg-white/90 p-12 text-center shadow-2xl">
+                  <Upload className="mx-auto mb-4 h-16 w-16 text-blue-500" />
+                  <p className="text-2xl font-bold text-blue-600">Drop photos or folders here</p>
+                  <p className="mt-2 text-sm text-muted-foreground">Release to add photos to your collection</p>
+                </div>
+              </div>
+            )}
+
             {/* Horizontal Layout: Manual Upload and Google Photos */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div
+              className="grid grid-cols-1 gap-6 md:grid-cols-2"
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               {/* Manual Upload Section */}
               <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
                 <CardHeader>
@@ -294,7 +473,7 @@ export default function UploadPhotosPage() {
                     Upload from Device
                   </CardTitle>
                   <CardDescription>
-                    Choose photos from your device
+                    Drag & drop, or choose photos from your device
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -316,7 +495,7 @@ export default function UploadPhotosPage() {
                             Select Photos
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Choose multiple photos
+                            Tip: Use Ctrl+A (or Cmd+A) to select all in the file picker
                           </p>
                         </div>
                       </div>
@@ -336,10 +515,10 @@ export default function UploadPhotosPage() {
                         <div className="flex min-h-[120px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-purple-300/50 bg-purple-50/30 p-4 text-center transition-colors hover:border-purple-400/70 hover:bg-purple-50/50">
                           <ImageIcon className="mb-2 h-8 w-8 text-purple-600" />
                           <p className="mb-1 text-sm font-medium text-foreground">
-                            Select Folder (Select All)
+                            Select Folder
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Upload entire album at once
+                            Automatically uploads all photos in folder
                           </p>
                         </div>
                       </div>
@@ -404,6 +583,8 @@ export default function UploadPhotosPage() {
                           uploadedImages.forEach((img) => URL.revokeObjectURL(img.preview))
                           setUploadedImages([])
                           setGooglePhotos([])
+                          sessionStorage.removeItem('pendingUploadCount')
+                          toast.info('All photos cleared')
                         }}
                       >
                         Clear All
@@ -479,7 +660,10 @@ export default function UploadPhotosPage() {
                   <div className="space-y-4">
                     <Progress value={uploadProgress} className="h-2" />
                     <p className="text-center text-sm text-muted-foreground">
-                      Uploading photos... {Math.round(uploadProgress)}%
+                      {uploadProgress < 70 && `Converting photos... ${Math.round(uploadProgress)}%`}
+                      {uploadProgress >= 70 && uploadProgress < 90 && `Uploading to server... ${Math.round(uploadProgress)}%`}
+                      {uploadProgress >= 90 && uploadProgress < 100 && `Processing... ${Math.round(uploadProgress)}%`}
+                      {uploadProgress === 100 && "Complete! Redirecting..."}
                     </p>
                   </div>
                 </CardContent>
@@ -548,13 +732,27 @@ export default function UploadPhotosPage() {
               How It Works
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>• Photos are securely stored in your personal collection</p>
-            <p>• Select individual photos or choose an entire folder to upload all at once</p>
-            <p>• Import photos from Google Photos or upload from your device</p>
-            <p>• AI analyzes each photo for semantic search capabilities</p>
-            <p>• Use natural language to find and create albums from your photos</p>
-            <p>• Your photos remain private and only accessible to you</p>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <div>
+              <p className="font-semibold text-foreground mb-1">📤 Multiple Ways to Upload:</p>
+              <p>• <strong>Drag & Drop:</strong> Drag photos or folders directly onto this page (Desktop)</p>
+              <p>• <strong>Select Photos:</strong> Click to pick individual photos (use Ctrl+A/Cmd+A in file picker to select all)</p>
+              <p>• <strong>Select Folder:</strong> Choose an entire folder to upload all photos at once</p>
+              <p>• <strong>Google Photos:</strong> Import directly from your Google Photos library</p>
+            </div>
+            <div>
+              <p className="font-semibold text-foreground mb-1">💡 Tips for Bulk Upload:</p>
+              <p>• <strong>Desktop:</strong> Use folder selection or drag entire folders for easiest bulk upload</p>
+              <p>• <strong>Mobile:</strong> Some devices support multi-select - tap and hold to select multiple photos</p>
+              <p>• <strong>Batches:</strong> You can upload in multiple batches - just add more photos before clicking "Upload All"</p>
+            </div>
+            <div>
+              <p className="font-semibold text-foreground mb-1">🔒 Privacy & Features:</p>
+              <p>• Photos are securely stored in your personal collection</p>
+              <p>• AI analyzes each photo for semantic search capabilities</p>
+              <p>• Use natural language to find and create albums from your photos</p>
+              <p>• Your photos remain private and only accessible to you</p>
+            </div>
           </CardContent>
         </Card>
       </main>

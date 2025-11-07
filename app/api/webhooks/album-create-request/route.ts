@@ -57,12 +57,18 @@ export async function POST(request: Request) {
       )
     }
 
-    // Return the photo results from n8n
+    // Return the photo results from webhook
+    // webhookResult.data contains { success, photos, count, searchType }
+    const photos = webhookResult.data?.photos || []
+
+    console.log(`[v0] Returning ${photos.length} photos to frontend`)
+
     return NextResponse.json({
       success: true,
       webhookTriggered: true,
       searchType: query ? "text" : "image",
-      photos: webhookResult.data || [],
+      photos: photos,
+      count: photos.length,
     })
   } catch (error) {
     console.error("[v0] Find photos webhook error:", error)

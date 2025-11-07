@@ -56,21 +56,30 @@ export default function CreateAlbumPage() {
         }
 
         const data = await response.json()
-        console.log("[v0] Album request created:", data)
+        console.log("[v0] Album request response:", data)
+        console.log("[v0] Photos in response:", data.photos)
+        console.log("[v0] Photos is array:", Array.isArray(data.photos))
+        console.log("[v0] Photos length:", data.photos?.length)
 
-        // Store the photos returned from n8n
+        // Store the photos returned from webhook
         if (data.photos && Array.isArray(data.photos)) {
+          console.log("[v0] ✅ Setting suggested photos:", data.photos.length)
           setSuggestedPhotos(data.photos)
           // Auto-select all photos by default
-          setSelectedPhotos(data.photos.map((photo: SuggestedPhoto) => photo.id))
+          const photoIds = data.photos.map((photo: SuggestedPhoto) => photo.id)
+          console.log("[v0] Auto-selecting photo IDs:", photoIds)
+          setSelectedPhotos(photoIds)
 
           if (data.photos.length === 0) {
-            console.warn("[v0] No photos returned from n8n webhook")
+            console.warn("[v0] ⚠️ No photos returned from webhook")
+            alert("No matching photos found. Try a different search query.")
           }
         } else {
-          console.warn("[v0] No photos data in response:", data)
+          console.error("[v0] ❌ No photos data in response:", data)
+          console.error("[v0] Response structure:", Object.keys(data))
           setSuggestedPhotos([])
           setSelectedPhotos([])
+          alert("Failed to get photos from search. Please try again.")
         }
 
         setIsProcessing(false)
