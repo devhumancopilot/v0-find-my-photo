@@ -147,9 +147,14 @@ export async function POST(request: NextRequest) {
 
         console.log(`Successfully sent ${n8nPayloads.length} images to n8n webhook`)
 
+        // Extract response data from n8n webhook if available
+        const n8nResponse = webhookResult.data || {}
+
         return NextResponse.json({
           success: true,
           uploaded_count: n8nPayloads.length,
+          processed_count: n8nResponse.processed_count || n8nPayloads.length,
+          duplicate_count: n8nResponse.duplicate_count || 0,
           message: "Images sent to processing pipeline",
         })
       } catch (webhookError) {

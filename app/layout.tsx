@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   description:
     "Turn your memories into beautiful photo albums with AI-powered discovery. Create stunning albums in minutes.",
   generator: "v0.app",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+  },
 }
 
 export default function RootLayout({

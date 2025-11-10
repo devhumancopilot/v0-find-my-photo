@@ -11,6 +11,52 @@ const openai = new OpenAI({
 })
 
 /**
+ * Clean caption by removing conversational text and formatting issues
+ */
+function cleanCaption(caption: string): string {
+  // List of conversational phrases to remove (case-insensitive)
+  const phrasesToRemove = [
+    /^sure[!,.]?\s*/i,
+    /^here\s+(is|are)\s+/i,
+    /^here'?s\s+/i,
+    /^this\s+image\s+(shows?|depicts?|contains?|features?)\s*/i,
+    /^the\s+image\s+(shows?|depicts?|contains?|features?)\s*/i,
+    /^in\s+this\s+image[,:]?\s*/i,
+    /^i\s+can\s+see\s*/i,
+    /^i\s+would\s+describe\s+this\s+as\s*/i,
+    /^based\s+on\s+the\s+image[,:]?\s*/i,
+    /^looking\s+at\s+this\s+image[,:]?\s*/i,
+    /^the\s+tags?\s+(are|would\s+be)[:\s]*/i,
+    /^tags?[:\s]+/i,
+    /^description[:\s]+/i,
+  ]
+
+  let cleaned = caption
+
+  // Remove conversational phrases from the beginning
+  for (const phrase of phrasesToRemove) {
+    cleaned = cleaned.replace(phrase, "")
+  }
+
+  // Remove quotes if the entire caption is wrapped in them
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+      (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1)
+  }
+
+  // Remove any leading/trailing punctuation except commas and periods within tags
+  cleaned = cleaned.trim()
+
+  // Remove multiple spaces
+  cleaned = cleaned.replace(/\s+/g, " ")
+
+  // Ensure first character is not a comma or colon
+  cleaned = cleaned.replace(/^[,:\s]+/, "")
+
+  return cleaned.trim()
+}
+
+/**
  * Generate image caption using GPT-4O Vision
  * Uses the exact prompt from N8N workflow
  */
@@ -20,11 +66,15 @@ export async function generateImageCaption(base64: string, mimeType: string): Pr
       model: "gpt-4o",
       messages: [
         {
+          role: "system",
+          content: "You are an image tagging system. Output ONLY comma-separated tags. DO NOT include conversational text, explanations, greetings, or phrases like 'Sure!', 'Here is', 'This image shows', etc. Output ONLY the tags themselves, nothing else.",
+        },
+        {
           role: "user",
           content: [
             {
               type: "text",
-              text: `Identify and describe what is shown in this image using short, factual tags. Focus on the main subject, scene type, and specific visual details such as objects, people, setting, activity, lighting, and environment. Each tag should be concise and concrete, avoiding abstract concepts, emotions, or artistic interpretation. Use clear, direct language — for example: 'red sports car, Ferrari, parked on street, daytime, city background, road markings, metal body, car logo visible, front view, sunny weather, motion blur'. Provide a minimum of 10 accurate and relevant tags that together give a complete, objective description of the image.'`,
+              text: "Analyze this image and output a comma-separated list of descriptive tags. Include: main subject, objects, people, setting, activity, colors, lighting, time of day, weather, environment, materials, textures, composition, and any visible text or brands. Be specific and factual. Minimum 10 tags. Output format: tag1, tag2, tag3, tag4, tag5...",
             },
             {
               type: "image_url",
@@ -37,13 +87,17 @@ export async function generateImageCaption(base64: string, mimeType: string): Pr
         },
       ],
       max_tokens: 300,
+      temperature: 0.3,
     })
 
-    const caption = response.choices[0]?.message?.content?.trim() || ""
+    let caption = response.choices[0]?.message?.content?.trim() || ""
 
     if (!caption) {
       throw new Error("No caption generated from OpenAI")
     }
+
+    // Clean up any conversational text that might have slipped through
+    caption = cleanCaption(caption)
 
     return caption
   } catch (error) {
