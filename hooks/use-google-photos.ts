@@ -106,8 +106,8 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
         'width=800,height=600,scrollbars=yes'
       );
 
-      if (!pickerWindow) {
-        throw new Error('Failed to open picker window. Please allow popups for this site.');
+      if (!pickerWindow || pickerWindow.closed) {
+        throw new Error('Failed to open picker window. Please allow popups for this site or disable your popup blocker.');
       }
 
       // Step 3: Poll for completion

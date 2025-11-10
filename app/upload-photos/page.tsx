@@ -227,6 +227,7 @@ export default function UploadPhotosPage() {
 
     try {
       let processedCount = 0
+      let result: any = null  // Declare result here so it's accessible throughout the try block
       const allPayloads: Array<{
         name: string
         data: string
@@ -348,7 +349,7 @@ export default function UploadPhotosPage() {
           throw new Error("Upload failed")
         }
 
-        const result = await response.json()
+        result = await response.json()
         console.log("Upload successful:", result)
 
         // Show duplicate notification if any
