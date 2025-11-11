@@ -58,6 +58,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
     caption: string | null
     position: number
     created_at: string
+    is_favorite: boolean | null
   }> = []
 
   if (album.photos && Array.isArray(album.photos) && album.photos.length > 0) {
@@ -67,7 +68,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
     // Fetch all photos for this album
     const { data: photos } = await supabase
       .from("photos")
-      .select("id, name, file_url, caption, position, created_at")
+      .select("id, name, file_url, caption, position, created_at, is_favorite")
       .in("id", photoIds)
       .order("position", { ascending: true })
 
@@ -218,6 +219,18 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
+                    {/* Favorite Button - Top Left Corner */}
+                    <div className="absolute left-2 top-2 z-10">
+                      <FavoriteButton
+                        itemId={photo.id}
+                        itemType="photo"
+                        initialIsFavorite={photo.is_favorite || false}
+                        variant="ghost"
+                        size="icon"
+                        showLabel={false}
+                      />
+                    </div>
+
                     {/* Photo Info Overlay */}
                     <div className="absolute bottom-0 left-0 right-0 translate-y-full p-3 transition-transform group-hover:translate-y-0">
                       {photo.caption && (
@@ -225,9 +238,6 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                       )}
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-white/80">{photo.name}</span>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-white hover:bg-white/20">
-                          <Heart className="h-4 w-4" />
-                        </Button>
                       </div>
                     </div>
 

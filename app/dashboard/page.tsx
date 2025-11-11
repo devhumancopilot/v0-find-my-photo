@@ -82,7 +82,7 @@ export default async function DashboardPage() {
   // Fetch all photos from the photos table
   const { data: photos, error: photosError } = await supabase
     .from("photos")
-    .select("id, name, file_url, type, size, caption, created_at, data")
+    .select("id, name, file_url, type, size, caption, created_at, data, is_favorite")
     .order("created_at", { ascending: false })
 
   // Get photo count for stats
