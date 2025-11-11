@@ -39,14 +39,29 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
 
       const result = await response.json()
 
-      toast.success("Processing Started!", {
-        description: `Processing ${result.queue_count || pendingCount} photo${(result.queue_count || pendingCount) !== 1 ? "s" : ""} in the background.`,
-        duration: 5000,
-      })
+      const processedCount = result.processed_count || 0
+      const failedCount = result.failed_count || 0
+      const remaining = result.remaining || 0
+
+      if (failedCount > 0) {
+        toast.warning("Processing Completed with Errors", {
+          description: `Processed ${processedCount} photo${processedCount !== 1 ? "s" : ""}. ${failedCount} failed. ${remaining > 0 ? `${remaining} remaining.` : ''}`,
+          duration: 5000,
+        })
+      } else {
+        toast.success("Processing Completed!", {
+          description: `Successfully processed ${processedCount} photo${processedCount !== 1 ? "s" : ""}. ${remaining > 0 ? `${remaining} remaining - click again to continue.` : 'All done!'}`,
+          duration: 5000,
+        })
+      }
 
       // Refresh the page to update counts
       setTimeout(() => {
         router.refresh()
+        // If there are remaining photos, keep the processing state ready
+        if (remaining === 0) {
+          setIsProcessing(false)
+        }
       }, 1000)
     } catch (error) {
       console.error("Processing error:", error)
@@ -97,7 +112,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
         </div>
 
         <div className="flex items-center gap-2">
-          {pendingCount > 0 && processingCount === 0 && (
+          {pendingCount > 0 && (
             <Button
               onClick={handleProcessNow}
               disabled={isProcessing}
@@ -105,7 +120,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
             >
               <Sparkles className="mr-2 h-4 w-4" />
-              {isProcessing ? "Starting..." : "Process Now"}
+              {isProcessing ? "Starting..." : processingCount > 0 ? `Process ${pendingCount} Pending` : "Process Now"}
             </Button>
           )}
           <Button
