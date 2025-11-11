@@ -26,16 +26,6 @@ interface GooglePhoto {
   source: 'google_photos'
 }
 
-// Browser-compatible base64 encoding function
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return btoa(binary)
-}
-
 export default function UploadPhotosPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -46,6 +36,11 @@ export default function UploadPhotosPage() {
   const [uploadComplete, setUploadComplete] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [showQueueNotification, setShowQueueNotification] = useState(false)
+  const [uploadedPhotoCount, setUploadedPhotoCount] = useState(0)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [currentUploadingPhoto, setCurrentUploadingPhoto] = useState(0)
+  const [totalPhotosToUpload, setTotalPhotosToUpload] = useState(0)
 
   // Check for OAuth callback success
   useEffect(() => {
@@ -224,144 +219,90 @@ export default function UploadPhotosPage() {
 
     setIsUploading(true)
     setUploadProgress(0)
+    setCurrentUploadingPhoto(0)
+    setTotalPhotosToUpload(totalPhotos)
 
     try {
-      let processedCount = 0
-      let result: any = null  // Declare result here so it's accessible throughout the try block
-      const allPayloads: Array<{
-        name: string
-        data: string
-        type: string
-        size: number
-      }> = []
+      const BATCH_SIZE = 10 // Upload 10 photos per request
+      let totalUploaded = 0
+      let totalFailed = 0
+      const allPhotosToUpload = [...uploadedImages, ...googlePhotos]
+      let currentPhotoIndex = 0
 
-      // Phase 1: Converting images (0-70%)
-      // Convert manual files to base64 payloads
-      if (uploadedImages.length > 0) {
-        for (const image of uploadedImages) {
-          const fileBuffer = await image.file.arrayBuffer()
-          // Use browser-compatible base64 encoding instead of Node.js Buffer
-          const base64Data = arrayBufferToBase64(fileBuffer)
+      console.log(`Starting batch upload: ${allPhotosToUpload.length} photos in batches of ${BATCH_SIZE}`)
 
-          const payload = {
-            name: image.file.name,
-            data: base64Data,
-            type: image.file.type,
-            size: image.file.size,
-          }
+      // Upload in batches
+      for (let i = 0; i < allPhotosToUpload.length; i += BATCH_SIZE) {
+        const batch = allPhotosToUpload.slice(i, i + BATCH_SIZE)
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1
+        const totalBatches = Math.ceil(allPhotosToUpload.length / BATCH_SIZE)
 
-          console.log(`Converted device photo to base64:`, {
-            name: payload.name,
-            type: payload.type,
-            size: payload.size,
-            base64Length: payload.data.length,
-          })
+        console.log(`Uploading batch ${batchNumber}/${totalBatches} (${batch.length} photos)`)
 
-          allPayloads.push(payload)
+        const formData = new FormData()
 
-          processedCount++
-          // Update progress gradually from 0-70% during conversion
-          setUploadProgress((processedCount / totalPhotos) * 70)
-        }
-      }
+        // Add device photos to FormData with progress updates
+        for (let j = 0; j < batch.length; j++) {
+          const item = batch[j]
+          currentPhotoIndex++
 
-      // Convert Google Photos to base64 payloads
-      if (googlePhotos.length > 0) {
-        for (const photo of googlePhotos) {
-          try {
-            // Fetch the full-size image from Google Photos via our proxy
-            // Use =d parameter to download the original quality
-            const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`
+          // Update progress for preparing photo
+          setCurrentUploadingPhoto(currentPhotoIndex)
+          const prepProgress = ((currentPhotoIndex - 0.5) / allPhotosToUpload.length) * 90 // 0-90% for preparation
+          setUploadProgress(Math.min(prepProgress, 90))
 
-            console.log(`Fetching Google Photo ${photo.id} for upload...`)
-            const imageResponse = await fetch(proxyUrl)
+          if ('file' in item) {
+            // Manual upload
+            formData.append('photos', item.file)
+          } else {
+            // Google Photos - need to fetch and add as Blob
+            try {
+              const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(item.baseUrl)}&size=d`
+              const imageResponse = await fetch(proxyUrl)
 
-            if (!imageResponse.ok) {
-              console.error(`Failed to fetch Google Photo ${photo.id}:`, imageResponse.status, imageResponse.statusText)
+              if (!imageResponse.ok) {
+                console.error(`Failed to fetch Google Photo ${item.id}`)
+                totalFailed++
+                continue
+              }
+
+              const blob = await imageResponse.blob()
+              const filename = item.filename || `google-photo-${item.id}.jpg`
+              formData.append('photos', blob, filename)
+            } catch (error) {
+              console.error(`Error fetching Google Photo ${item.id}:`, error)
+              totalFailed++
               continue
             }
-
-            const imageBuffer = await imageResponse.arrayBuffer()
-            // Use browser-compatible base64 encoding instead of Node.js Buffer
-            const base64Data = arrayBufferToBase64(imageBuffer)
-
-            const payload = {
-              name: photo.filename || `google-photo-${photo.id}.jpg`,
-              data: base64Data,
-              type: photo.mimeType,
-              size: imageBuffer.byteLength,
-            }
-
-            console.log(`Converted Google Photo ${photo.id} to base64:`, {
-              name: payload.name,
-              type: payload.type,
-              size: payload.size,
-              base64Length: payload.data.length,
-            })
-
-            allPayloads.push(payload)
-
-            processedCount++
-            // Update progress gradually from 0-70% during conversion
-            setUploadProgress((processedCount / totalPhotos) * 70)
-          } catch (error) {
-            console.error(`Error processing Google Photo ${photo.id}:`, error)
-            // Continue with other photos
           }
         }
-      }
 
-      // Phase 2: Uploading to server (70-90%)
-      setUploadProgress(75)
+        // Upload batch to new API endpoint
+        try {
+          // Update progress to show uploading this batch
+          const uploadProgress = ((i + batch.length) / allPhotosToUpload.length) * 95 // 0-95% for upload
+          setUploadProgress(Math.min(uploadProgress, 95))
 
-      // Send all photos through the webhook
-      if (allPayloads.length > 0) {
-        console.log(`Sending ${allPayloads.length} photos to webhook:`, {
-          totalPhotos: allPayloads.length,
-          devicePhotos: uploadedImages.length,
-          googlePhotos: googlePhotos.length,
-          payloadStructure: allPayloads.map((p) => ({
-            name: p.name,
-            type: p.type,
-            size: p.size,
-            hasBase64Data: !!p.data,
-            base64Length: p.data.length,
-          })),
-        })
-
-        setUploadProgress(80)
-
-        const response = await fetch("/api/webhooks/photos-upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            images: allPayloads,
-          }),
-        })
-
-        setUploadProgress(90)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error("Upload failed:", response.status, errorText)
-          throw new Error("Upload failed")
-        }
-
-        result = await response.json()
-        console.log("Upload successful:", result)
-
-        // Show duplicate notification if any
-        if (result.duplicate_count && result.duplicate_count > 0) {
-          toast.warning("Duplicate Photos Detected", {
-            description: `${result.duplicate_count} photo${result.duplicate_count !== 1 ? "s were" : " was"} already in your library and skipped.`,
-            duration: 5000,
+          const response = await fetch('/api/photos/upload', {
+            method: 'POST',
+            body: formData,
           })
-        }
 
-        // Phase 3: Finalizing (90-100%)
-        setUploadProgress(95)
+          if (!response.ok) {
+            const errorText = await response.text()
+            console.error(`Batch ${batchNumber} upload failed:`, response.status, errorText)
+            totalFailed += batch.length
+            throw new Error(`Batch upload failed: ${errorText}`)
+          }
+
+          const result = await response.json()
+          totalUploaded += result.uploaded_count || 0
+
+          console.log(`Batch ${batchNumber} uploaded successfully:`, result)
+        } catch (error) {
+          console.error(`Batch ${batchNumber} error:`, error)
+          // Continue with next batch even if this one fails
+        }
       }
 
       // Clean up object URLs
@@ -374,29 +315,20 @@ export default function UploadPhotosPage() {
 
       // Complete!
       setUploadProgress(100)
-      setUploadComplete(true)
+      setUploadedPhotoCount(totalUploaded)
 
-      // Calculate actual uploaded count
-      const actualUploaded = result.processed_count || allPayloads.length
-      const duplicateCount = result.duplicate_count || 0
+      if (totalUploaded > 0) {
+        // Show queue notification instead of redirect
+        setShowQueueNotification(true)
+        setIsUploading(false)
 
-      // Show success toast
-      if (actualUploaded > 0) {
         toast.success("Upload Complete!", {
-          description: `Successfully uploaded ${actualUploaded} photo${actualUploaded !== 1 ? "s" : ""}. Your photos are now being processed.${duplicateCount > 0 ? ` (${duplicateCount} duplicate${duplicateCount !== 1 ? "s" : ""} skipped)` : ""}`,
+          description: `Successfully uploaded ${totalUploaded} photo${totalUploaded !== 1 ? "s" : ""}. They are ready for processing.`,
           duration: 5000,
         })
-      } else if (duplicateCount > 0) {
-        toast.info("No New Photos", {
-          description: `All ${duplicateCount} photo${duplicateCount !== 1 ? "s were" : " was"} already in your library.`,
-          duration: 5000,
-        })
+      } else {
+        throw new Error("No photos were uploaded successfully")
       }
-
-      // Redirect to dashboard after 3 seconds
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 3000)
     } catch (error) {
       console.error("Upload error:", error)
       toast.error("Upload Failed", {
@@ -405,6 +337,50 @@ export default function UploadPhotosPage() {
       })
       setIsUploading(false)
       setUploadProgress(0)
+      setCurrentUploadingPhoto(0)
+      setTotalPhotosToUpload(0)
+    }
+  }
+
+  const handleProcessQueue = async () => {
+    setIsProcessing(true)
+
+    try {
+      const response = await fetch('/api/photos/process-queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to start processing')
+      }
+
+      const result = await response.json()
+
+      toast.success("Processing Started!", {
+        description: `Processing ${result.queue_count || uploadedPhotoCount} photo${(result.queue_count || uploadedPhotoCount) !== 1 ? "s" : ""} in the background. You can continue using the app.`,
+        duration: 5000,
+      })
+
+      // Clear states and redirect to dashboard
+      setShowQueueNotification(false)
+      setUploadedImages([])
+      setGooglePhotos([])
+      setUploadComplete(true)
+
+      setTimeout(() => {
+        router.push("/dashboard")
+      }, 2000)
+    } catch (error) {
+      console.error("Processing error:", error)
+      toast.error("Processing Failed", {
+        description: error instanceof Error ? error.message : "Failed to start processing. Please try again.",
+        duration: 5000,
+      })
+    } finally {
+      setIsProcessing(false)
     }
   }
 
@@ -660,19 +636,83 @@ export default function UploadPhotosPage() {
                 <CardContent className="pt-6">
                   <div className="space-y-4">
                     <Progress value={uploadProgress} className="h-2" />
-                    <p className="text-center text-sm text-muted-foreground">
-                      {uploadProgress < 70 && `Converting photos... ${Math.round(uploadProgress)}%`}
-                      {uploadProgress >= 70 && uploadProgress < 90 && `Uploading to server... ${Math.round(uploadProgress)}%`}
-                      {uploadProgress >= 90 && uploadProgress < 100 && `Processing... ${Math.round(uploadProgress)}%`}
-                      {uploadProgress === 100 && "Complete! Redirecting..."}
-                    </p>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-foreground mb-1">
+                        {uploadProgress < 95 && currentUploadingPhoto > 0 && (
+                          <>Uploading photo {currentUploadingPhoto} of {totalPhotosToUpload}</>
+                        )}
+                        {uploadProgress >= 95 && uploadProgress < 100 && <>Finalizing upload...</>}
+                        {uploadProgress === 100 && <>Upload complete!</>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {Math.round(uploadProgress)}% complete
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             )}
 
+            {/* Queue Processing Notification */}
+            {showQueueNotification && (
+              <Card className="border-blue-200 bg-blue-50/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-900">
+                    <CheckCircle className="h-6 w-6 text-blue-600" />
+                    Photos Uploaded Successfully!
+                  </CardTitle>
+                  <CardDescription className="text-blue-800">
+                    {uploadedPhotoCount} photo{uploadedPhotoCount !== 1 ? "s have" : " has"} been uploaded to your library
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertDescription className="text-amber-900">
+                      <p className="font-semibold mb-2">📸 Ready for Processing</p>
+                      <p className="text-sm">
+                        Your photos are ready! They need to be processed for AI features like caption generation and face detection.
+                        This happens in the background and won't affect your browsing.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={handleProcessQueue}
+                      disabled={isProcessing}
+                      className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                      size="lg"
+                    >
+                      <Sparkles className="mr-2 h-5 w-5" />
+                      {isProcessing ? "Starting..." : "Process Now"}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        // Track that user chose to process later
+                        console.log(`[User Action] Chose to process ${uploadedPhotoCount} photos later`)
+
+                        toast.info("Photos Saved", {
+                          description: `${uploadedPhotoCount} photo${uploadedPhotoCount !== 1 ? "s are" : " is"} ready. You can process them anytime from your dashboard.`,
+                          duration: 5000,
+                        })
+
+                        setShowQueueNotification(false)
+                        router.push("/dashboard")
+                      }}
+                      variant="outline"
+                      size="lg"
+                    >
+                      Process Later
+                    </Button>
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground">
+                    You can process these photos anytime from your dashboard
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Action Buttons */}
-            {totalPhotos > 0 && !isUploading && (
+            {totalPhotos > 0 && !isUploading && !showQueueNotification && (
               <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
                 <CardContent className="pt-6">
                   <div className="flex flex-col gap-4">

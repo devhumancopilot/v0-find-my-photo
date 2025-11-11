@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { FavoriteButton } from "@/components/favorite-button"
 import { ImageIcon, Calendar, FileText, HardDrive } from "lucide-react"
 
 interface Photo {
@@ -13,6 +14,7 @@ interface Photo {
   caption: string | null
   created_at: string
   data: string | null
+  is_favorite?: boolean
 }
 
 interface PhotoGalleryProps {
@@ -88,6 +90,17 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
                 <ImageIcon className="mx-auto mb-2 h-12 w-12 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">No preview</p>
               </div>
+            </div>
+            {/* Favorite Button - Top Left Corner */}
+            <div className="absolute left-2 top-2 z-10">
+              <FavoriteButton
+                itemId={photo.id}
+                itemType="photo"
+                initialIsFavorite={photo.is_favorite || false}
+                variant="ghost"
+                size="icon"
+                showLabel={false}
+              />
             </div>
             {/* Type Badge */}
             {photo.type && (
