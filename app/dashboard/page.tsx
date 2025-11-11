@@ -16,6 +16,8 @@ import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, FolderOpen, Upload }
 import { PhotoGallery } from "@/components/photo-gallery"
 import { LogoutButton } from "@/components/logout-button"
 import { FaceProfilesSection } from "@/components/face-profiles-section"
+import { QueueNotificationBanner } from "@/components/queue-notification-banner"
+import { FavoriteButton } from "@/components/favorite-button"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -29,6 +31,19 @@ export default async function DashboardPage() {
   }
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+
+  // Check for pending photos in processing queue
+  const { count: pendingQueueCount } = await supabase
+    .from("photo_processing_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("status", "pending")
+
+  const { count: processingQueueCount } = await supabase
+    .from("photo_processing_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("status", "processing")
 
   // Fetch albums with resolved cover images
   const { data: rawAlbums } = await supabase
@@ -75,10 +90,25 @@ export default async function DashboardPage() {
     .from("photos")
     .select("*", { count: "exact", head: true })
 
+  // Get favorite counts
+  const { count: favoriteCount } = await supabase
+    .from("photos")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("is_favorite", true)
+
+  const { count: favoriteAlbumCount } = await supabase
+    .from("albums")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("is_favorite", true)
+
+  const totalFavorites = (favoriteCount || 0) + (favoriteAlbumCount || 0)
+
   const stats = [
     { label: "Total Albums", value: String(albums?.length || 0), icon: FolderOpen },
     { label: "Total Photos", value: String(photoCount || 0), icon: ImageIcon },
-    { label: "Favorites", value: "0", icon: Heart },
+    { label: "Favorites", value: String(totalFavorites), icon: Heart },
   ]
 
   // Check if face detection is enabled
@@ -150,6 +180,12 @@ export default async function DashboardPage() {
           <h1 className="mb-2 text-3xl font-bold text-foreground">Welcome back, {profile?.display_name || "there"}</h1>
           <p className="text-muted-foreground">Here's what's happening with your photo albums</p>
         </div>
+
+        {/* Queue Notification Banner */}
+        <QueueNotificationBanner
+          pendingCount={pendingQueueCount || 0}
+          processingCount={processingQueueCount || 0}
+        />
 
         {/* Stats Cards */}
         <div className="mb-8 grid gap-4 md:grid-cols-3">
@@ -237,6 +273,17 @@ export default async function DashboardPage() {
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                    {/* Favorite Button - Top Right Corner */}
+                    <div className="absolute top-3 right-3 z-10">
+                      <FavoriteButton
+                        itemId={album.id}
+                        itemType="album"
+                        initialIsFavorite={album.is_favorite || false}
+                        variant="ghost"
+                        size="icon"
+                        showLabel={false}
+                      />
+                    </div>
                     <div className="absolute bottom-4 left-4 right-4 translate-y-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
                       <Link href={`/albums/${album.id}`}>
                         <Button size="sm" className="w-full bg-white text-foreground hover:bg-white/90">

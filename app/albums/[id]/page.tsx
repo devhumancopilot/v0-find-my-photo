@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { FavoriteButton } from "@/components/favorite-button"
 import {
   Sparkles,
   ArrowLeft,
@@ -130,10 +131,14 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Heart className="mr-2 h-4 w-4" />
-                Favorite
-              </Button>
+              <FavoriteButton
+                itemId={album.id}
+                itemType="album"
+                initialIsFavorite={album.is_favorite || false}
+                variant="outline"
+                size="sm"
+                showLabel={true}
+              />
               <Button variant="outline" size="sm">
                 <Share2 className="mr-2 h-4 w-4" />
                 Share
