@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { FavoriteButton } from "@/components/favorite-button"
+import { AlbumActions } from "@/components/album-actions"
 import {
   Sparkles,
   ArrowLeft,
@@ -13,7 +14,6 @@ import {
   Download,
   Share2,
   Edit,
-  Trash2,
   Heart,
   Printer
 } from "lucide-react"
@@ -158,10 +158,11 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </Button>
-              <Button variant="outline" size="sm" className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
+              <AlbumActions
+                albumId={album.id}
+                albumTitle={album.album_title}
+                photoCount={albumPhotos.length}
+              />
             </div>
           </div>
 

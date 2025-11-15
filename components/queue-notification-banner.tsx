@@ -77,20 +77,32 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
                     <>Photos Ready for Processing</>
                   )}
                 </p>
-                <p className="text-sm text-blue-800">
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p>
+                    {processingCount > 0 && (
+                      <>
+                        {processingCount} photo{processingCount !== 1 ? "s are" : " is"} currently being processed.
+                        {pendingCount > 0 && ` ${pendingCount} more waiting in queue.`}
+                      </>
+                    )}
+                    {processingCount === 0 && pendingCount > 0 && (
+                      <>
+                        You have {pendingCount} photo{pendingCount !== 1 ? "s" : ""} waiting for AI processing
+                        (captions, embeddings, face detection).
+                      </>
+                    )}
+                  </p>
                   {processingCount > 0 && (
-                    <>
-                      {processingCount} photo{processingCount !== 1 ? "s are" : " is"} currently being processed.
-                      {pendingCount > 0 && ` ${pendingCount} more waiting in queue.`}
-                    </>
+                    <p className="text-xs text-blue-600 font-medium">
+                      AI is analyzing each photo to generate captions and enable smart search. This takes a while to ensure the best results!
+                    </p>
                   )}
                   {processingCount === 0 && pendingCount > 0 && (
-                    <>
-                      You have {pendingCount} photo{pendingCount !== 1 ? "s" : ""} waiting for AI processing
-                      (captions, embeddings, face detection).
-                    </>
+                    <p className="text-xs text-blue-600 font-medium">
+                      Processing enables AI-powered features like smart search and automatic photo organization. You can continue browsing while it runs in the background.
+                    </p>
                   )}
-                </p>
+                </div>
               </div>
             </div>
           </AlertDescription>

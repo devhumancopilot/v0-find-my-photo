@@ -227,7 +227,6 @@ export default function UploadPhotosPage() {
       let totalUploaded = 0
       let totalFailed = 0
       const allPhotosToUpload = [...uploadedImages, ...googlePhotos]
-      let currentPhotoIndex = 0
 
       console.log(`Starting batch upload: ${allPhotosToUpload.length} photos in batches of ${BATCH_SIZE}`)
 
@@ -244,11 +243,11 @@ export default function UploadPhotosPage() {
         // Add device photos to FormData with progress updates
         for (let j = 0; j < batch.length; j++) {
           const item = batch[j]
-          currentPhotoIndex++
+          const currentPhotoIndex = i + j + 1
 
-          // Update progress for preparing photo
+          // Update progress per photo (0-90% for preparation)
           setCurrentUploadingPhoto(currentPhotoIndex)
-          const prepProgress = ((currentPhotoIndex - 0.5) / allPhotosToUpload.length) * 90 // 0-90% for preparation
+          const prepProgress = ((currentPhotoIndex - 0.5) / allPhotosToUpload.length) * 90
           setUploadProgress(Math.min(prepProgress, 90))
 
           if ('file' in item) {
@@ -279,10 +278,6 @@ export default function UploadPhotosPage() {
 
         // Upload batch to new API endpoint
         try {
-          // Update progress to show uploading this batch
-          const uploadProgress = ((i + batch.length) / allPhotosToUpload.length) * 95 // 0-95% for upload
-          setUploadProgress(Math.min(uploadProgress, 95))
-
           const response = await fetch('/api/photos/upload', {
             method: 'POST',
             body: formData,
@@ -296,7 +291,13 @@ export default function UploadPhotosPage() {
           }
 
           const result = await response.json()
-          totalUploaded += result.uploaded_count || 0
+          const batchUploadedCount = result.uploaded_count || 0
+          totalUploaded += batchUploadedCount
+
+          // Update progress per photo actually uploaded (90-98% for upload completion)
+          const uploadProgress = 90 + ((totalUploaded / allPhotosToUpload.length) * 8)
+          setUploadProgress(Math.min(uploadProgress, 98))
+          setCurrentUploadingPhoto(totalUploaded)
 
           console.log(`Batch ${batchNumber} uploaded successfully:`, result)
         } catch (error) {
@@ -638,14 +639,24 @@ export default function UploadPhotosPage() {
                     <Progress value={uploadProgress} className="h-2" />
                     <div className="text-center">
                       <p className="text-sm font-semibold text-foreground mb-1">
-                        {uploadProgress < 95 && currentUploadingPhoto > 0 && (
+                        {uploadProgress < 98 && currentUploadingPhoto > 0 && (
                           <>Uploading photo {currentUploadingPhoto} of {totalPhotosToUpload}</>
                         )}
-                        {uploadProgress >= 95 && uploadProgress < 100 && <>Finalizing upload...</>}
+                        {uploadProgress >= 98 && uploadProgress < 100 && <>Finalizing upload...</>}
                         {uploadProgress === 100 && <>Upload complete!</>}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mb-2">
                         {Math.round(uploadProgress)}% complete
+                      </p>
+                      {/* Helper messages */}
+                      <p className="text-xs text-blue-600 font-medium mt-2">
+                        {uploadProgress < 25 && "Getting your photos ready..."}
+                        {uploadProgress >= 25 && uploadProgress < 50 && "Making progress! This may take a moment for large collections"}
+                        {uploadProgress >= 50 && uploadProgress < 75 && `It's going well! Processing photo ${currentUploadingPhoto} of ${totalPhotosToUpload}`}
+                        {uploadProgress >= 75 && uploadProgress < 90 && "Almost there! Hang tight"}
+                        {uploadProgress >= 90 && uploadProgress < 98 && "Nearly done! Finalizing your photos"}
+                        {uploadProgress >= 98 && uploadProgress < 100 && "Just a moment more..."}
+                        {uploadProgress === 100 && "All done! Your photos are ready"}
                       </p>
                     </div>
                   </div>

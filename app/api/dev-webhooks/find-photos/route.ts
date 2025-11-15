@@ -12,7 +12,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { generateTextEmbedding, generateImageEmbedding } from "@/lib/services/openai"
+import {
+  generateTextEmbedding,
+  generateImageEmbedding,
+  prepareEmbeddingForStorage,
+  getEmbeddingConfig
+} from "@/lib/services/embeddings"
 import { matchPhotos } from "@/lib/services/database"
 
 export async function POST(request: NextRequest) {
@@ -29,7 +34,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Either query (text) or image (base64) must be provided" }, { status: 400 })
     }
 
-    console.log(`[Fallback] Finding photos for user ${requestUser.id}, type: ${query ? "text" : "image"}`)
+    const embeddingConfig = getEmbeddingConfig()
+    console.log(`[Fallback][SEARCH-START] ========================================`)
+    console.log(`[Fallback][SEARCH-START] Finding photos for user ${requestUser.id}`)
+    console.log(`[Fallback][SEARCH-START] Search Type: ${query ? "TEXT" : "IMAGE"}`)
+    console.log(`[Fallback][SEARCH-START] Provider: ${embeddingConfig.provider.toUpperCase()}`)
+    console.log(`[Fallback][SEARCH-START] Dimensions: ${embeddingConfig.dimensions}D`)
+    if (query) {
+      console.log(`[Fallback][SEARCH-START] Query: "${query}"`)
+    }
+    console.log(`[Fallback][SEARCH-START] ========================================`)
 
     // First, check if user has any photos at all (diagnostic)
     try {
@@ -71,51 +85,62 @@ export async function POST(request: NextRequest) {
     try {
       if (query) {
         // Text-based search
-        console.log(`[Fallback] Generating text embedding for query: "${query}"`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][TEXT-SEARCH] Generating text embedding`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][TEXT-SEARCH] Query: "${query}"`)
         embedding = await generateTextEmbedding(query)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][TEXT-SEARCH] ✓ Embedding generated: ${embedding.length}D`)
       } else if (image) {
         // Image-based search
-        console.log(`[Fallback] Generating image embedding from uploaded image`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][IMAGE-SEARCH] Generating image embedding`)
         // Extract MIME type from base64 data URL if present
         const mimeMatch = image.match(/^data:([^;]+);base64,/)
         const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg"
         const base64Data = image.replace(/^data:[^;]+;base64,/, "")
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][IMAGE-SEARCH] Image type: ${mimeType}`)
 
         embedding = await generateImageEmbedding(base64Data, mimeType)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][IMAGE-SEARCH] ✓ Embedding generated: ${embedding.length}D`)
       } else {
         return NextResponse.json({ error: "No query or image provided" }, { status: 400 })
       }
 
-      console.log(`[Fallback] Embedding generated (${embedding.length} dimensions)`)
+      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Raw embedding: ${embedding.length} dimensions`)
+
+      // Prepare embedding for database query (handle dimension compatibility)
+      const searchEmbedding = prepareEmbeddingForStorage(embedding)
+      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Search embedding prepared: ${searchEmbedding.length} dimensions`)
+
+      // Use the prepared embedding for search
+      embedding = searchEmbedding
 
       // Perform vector similarity search
-      console.log(`[Fallback] Searching for similar photos for user: ${requestUser.id}`)
-      console.log(`[Fallback] Embedding length: ${embedding.length}`)
-      console.log(`[Fallback] First few embedding values:`, embedding.slice(0, 5))
+      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Performing vector similarity search`)
+      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] User ID: ${requestUser.id}`)
+      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Embedding dimensions: ${embedding.length}`)
 
       const matchCount = 50 // Increased to get more results including low similarity
       const allPhotos = await matchPhotos(embedding, requestUser.id, matchCount)
 
-      console.log(`[Fallback] Found ${allPhotos.length} matching photos (before filtering)`)
+      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Found ${allPhotos.length} photos (before filtering)`)
 
       // Filter to only include photos above minimum similarity threshold
       const MIN_SIMILARITY = parseFloat(process.env.PHOTO_SEARCH_MIN_SIMILARITY || "0.4")
       const photos = allPhotos.filter(p => p.similarity >= MIN_SIMILARITY)
 
-      console.log(`[Fallback] After filtering (>= ${(MIN_SIMILARITY * 100).toFixed(0)}% similarity): ${photos.length} photos`)
+      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] After filtering (>= ${(MIN_SIMILARITY * 100).toFixed(0)}% similarity): ${photos.length} photos`)
 
       // Log ALL matches with their similarity scores
       if (allPhotos.length > 0) {
-        console.log(`[Fallback] ========== ALL MATCHES (including low similarity) ==========`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ========== SEARCH RESULTS ==========`)
         allPhotos.forEach((photo, index) => {
           const similarityPercent = (photo.similarity * 100).toFixed(2)
           const relevance = photo.similarity >= 0.7 ? '🟢 HIGH' :
                            photo.similarity >= 0.5 ? '🟡 MEDIUM' :
                            photo.similarity >= 0.3 ? '🟠 LOW' :
                            '🔴 VERY LOW'
-          console.log(`[Fallback] ${index + 1}. ${relevance} ${similarityPercent}% - ${photo.name} (ID: ${photo.id})`)
+          console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ${index + 1}. ${relevance} ${similarityPercent}% - ${photo.name} (ID: ${photo.id})`)
         })
-        console.log(`[Fallback] =====================================================`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ===================================`)
 
         // Summary by relevance level (from all photos)
         const high = allPhotos.filter(p => p.similarity >= 0.7).length
@@ -123,11 +148,17 @@ export async function POST(request: NextRequest) {
         const low = allPhotos.filter(p => p.similarity >= 0.3 && p.similarity < 0.6).length
         const veryLow = allPhotos.filter(p => p.similarity < 0.3).length
 
-        console.log(`[Fallback] Summary (all): ${high} high (≥70%), ${medium} medium (60-69%), ${low} low (30-59%), ${veryLow} very low (<30%)`)
-        console.log(`[Fallback] Returning ${photos.length} photos with ≥60% similarity to frontend`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Summary: ${high} high (≥70%), ${medium} medium (60-69%), ${low} low (30-59%), ${veryLow} very low (<30%)`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Returning ${photos.length} photos (≥${(MIN_SIMILARITY * 100).toFixed(0)}% similarity)`)
       } else {
-        console.log(`[Fallback] ⚠️ NO MATCHES FOUND - Check if photos exist in database for user ${requestUser.id}`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ⚠️ NO MATCHES FOUND`)
       }
+
+      console.log(`[Fallback][SEARCH-END] ========================================`)
+      console.log(`[Fallback][SEARCH-END] Search Complete`)
+      console.log(`[Fallback][SEARCH-END] Provider: ${embeddingConfig.provider.toUpperCase()}`)
+      console.log(`[Fallback][SEARCH-END] Results: ${photos.length} photos returned`)
+      console.log(`[Fallback][SEARCH-END] ========================================`)
 
       return NextResponse.json({
         success: true,

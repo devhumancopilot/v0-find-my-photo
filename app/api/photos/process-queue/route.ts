@@ -14,7 +14,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
-import { generateImageCaption, generateTextEmbedding } from "@/lib/services/openai"
+import {
+  generateImageCaption,
+  generateImageEmbedding,
+  prepareEmbeddingForStorage,
+  getEmbeddingConfig
+} from "@/lib/services/embeddings"
 import { detectFaces } from "@/lib/services/face-detection"
 import { insertFaceProfile, matchFaces } from "@/lib/services/database"
 
@@ -89,7 +94,14 @@ async function processQueueInBackground(
   queueItems: Array<{ id: number; photo_id: number; retry_count: number }>,
   supabase: any
 ) {
-  console.log(`[Process Queue BG] Starting background processing of ${queueItems.length} photos`)
+  const embeddingConfig = getEmbeddingConfig()
+  console.log(`[Process Queue BG][BATCH-START] ========================================`)
+  console.log(`[Process Queue BG][BATCH-START] Starting background processing of ${queueItems.length} photos`)
+  console.log(`[Process Queue BG][BATCH-START] User ID: ${userId}`)
+  console.log(`[Process Queue BG][BATCH-START] Embedding Provider: ${embeddingConfig.provider.toUpperCase()}`)
+  console.log(`[Process Queue BG][BATCH-START] Dimensions: ${embeddingConfig.dimensions}D`)
+  console.log(`[Process Queue BG][BATCH-START] Multimodal Support: ${embeddingConfig.supportsMultimodal ? 'YES (CLIP)' : 'NO (Caption-based)'}`)
+  console.log(`[Process Queue BG][BATCH-START] ========================================`)
 
   let processedCount = 0
   let failedCount = 0
@@ -121,7 +133,7 @@ async function processQueueInBackground(
         throw new Error(`Photo not found: ${photoError?.message}`)
       }
 
-      console.log(`[Process Queue BG] Processing photo ${photo.id}: ${photo.name}`)
+      console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Processing photo ${photo.id}: ${photo.name}`)
 
       // Fetch image from storage
       const imageResponse = await fetch(photo.file_url)
@@ -132,24 +144,60 @@ async function processQueueInBackground(
       const imageBuffer = await imageResponse.arrayBuffer()
       const base64Data = Buffer.from(imageBuffer).toString('base64')
 
-      // Step 1: Generate caption
-      console.log(`[Process Queue BG] Generating caption for ${photo.name}`)
-      const caption = await generateImageCaption(base64Data, photo.type)
-      console.log(`[Process Queue BG] Caption: ${caption.substring(0, 100)}...`)
+      // Generate caption and embedding based on provider
+      let caption: string | null
+      let embedding: number[]
 
-      // Step 2: Generate embedding
-      console.log(`[Process Queue BG] Generating embedding for ${photo.name}`)
-      const embedding = await generateTextEmbedding(caption)
-      console.log(`[Process Queue BG] Embedding generated (${embedding.length} dimensions)`)
+      if (embeddingConfig.supportsMultimodal) {
+        // CLIP approach: direct image embedding
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] 🎨 Using CLIP multimodal approach`)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] -> Direct image encoding`)
+
+        embedding = await generateImageEmbedding(base64Data, photo.type)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ Embedding generated: ${embedding.length}D`)
+
+        // Caption is optional for CLIP but nice to have for display
+        caption = await generateImageCaption(base64Data, photo.type)
+        if (caption) {
+          console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] Caption (optional): ${caption.substring(0, 100)}...`)
+        } else {
+          // CLIP doesn't generate captions, use a placeholder
+          caption = "Image processed with CLIP"
+        }
+      } else {
+        // OpenAI approach: caption-based
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] 📝 Using OpenAI caption-based approach`)
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] -> Step 1: Generating caption with GPT-4 Vision`)
+
+        caption = await generateImageCaption(base64Data, photo.type)
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] ✓ Caption: ${caption?.substring(0, 100)}...`)
+
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] -> Step 2: Generating embedding`)
+        embedding = await generateImageEmbedding(base64Data, photo.type)
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] ✓ Embedding generated: ${embedding.length}D`)
+      }
+
+      // Prepare embedding for storage
+      const storageEmbedding = prepareEmbeddingForStorage(embedding)
+      console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Storage embedding: ${storageEmbedding.length} dimensions`)
+
+      // Prepare update data
+      const updateData: any = {
+        caption,
+        embedding: storageEmbedding,
+        processing_status: 'processing', // Will be set to 'completed' after face detection
+      }
+
+      // If using CLIP (512D), also save to embedding_clip column
+      if (embeddingConfig.supportsMultimodal && embedding.length === 512) {
+        updateData.embedding_clip = JSON.stringify(embedding) // Save native 512D
+        console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Saving to embedding_clip: ${embedding.length}D (native CLIP)`)
+      }
 
       // Step 3: Update photo with caption and embedding
       const { error: updateError } = await supabase
         .from('photos')
-        .update({
-          caption,
-          embedding,
-          processing_status: 'processing', // Will be set to 'completed' after face detection
-        })
+        .update(updateData)
         .eq('id', photo.id)
 
       if (updateError) {
@@ -240,7 +288,7 @@ async function processQueueInBackground(
         .eq('id', photo.id)
 
       processedCount++
-      console.log(`[Process Queue BG] Successfully processed ${photo.name} (${processedCount}/${queueItems.length})`)
+      console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount}/${queueItems.length}] ✅ SUCCESS - ${photo.name}`)
     } catch (error) {
       failedCount++
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -284,7 +332,10 @@ async function processQueueInBackground(
     }
   }
 
-  console.log(
-    `[Process Queue BG] Completed: ${processedCount} successful, ${failedCount} failed`
-  )
+  console.log(`[Process Queue BG][BATCH-END] ========================================`)
+  console.log(`[Process Queue BG][BATCH-END] Batch Processing Complete`)
+  console.log(`[Process Queue BG][BATCH-END] Provider Used: ${embeddingConfig.provider.toUpperCase()}`)
+  console.log(`[Process Queue BG][BATCH-END] Results: ${processedCount} successful, ${failedCount} failed`)
+  console.log(`[Process Queue BG][BATCH-END] Total: ${processedCount + failedCount}/${queueItems.length} processed`)
+  console.log(`[Process Queue BG][BATCH-END] ========================================`)
 }

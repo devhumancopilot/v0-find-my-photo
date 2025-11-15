@@ -27,6 +27,46 @@ export async function POST(request: Request) {
       )
     }
 
+    // SECURITY CHECK: Verify all photo IDs belong to the authenticated user
+    // This prevents users from adding other users' photos to their albums
+    const { data: verifiedPhotos, error: verifyError } = await supabase
+      .from("photos")
+      .select("id")
+      .in("id", photoIds)
+      .eq("user_id", user.id)
+
+    if (verifyError) {
+      console.error("[v0] Error verifying photo ownership:", verifyError)
+      return NextResponse.json(
+        { error: "Failed to verify photo ownership" },
+        { status: 500 }
+      )
+    }
+
+    const verifiedPhotoIds = verifiedPhotos?.map(p => p.id) || []
+
+    // Check if any requested photos don't belong to the user
+    const unauthorizedPhotoIds = photoIds.filter(id => !verifiedPhotoIds.includes(id))
+    if (unauthorizedPhotoIds.length > 0) {
+      console.warn(`[v0] ⚠️ SECURITY: User ${user.id} attempted to add ${unauthorizedPhotoIds.length} unauthorized photos to album`)
+      console.warn(`[v0] Unauthorized photo IDs:`, unauthorizedPhotoIds)
+      return NextResponse.json(
+        { error: "Some photos do not belong to you or do not exist" },
+        { status: 403 }
+      )
+    }
+
+    // Verify coverPhotoId also belongs to user if specified
+    if (coverPhotoId && !verifiedPhotoIds.includes(coverPhotoId)) {
+      console.warn(`[v0] ⚠️ SECURITY: User ${user.id} attempted to use unauthorized cover photo ${coverPhotoId}`)
+      return NextResponse.json(
+        { error: "Cover photo does not belong to you or does not exist" },
+        { status: 403 }
+      )
+    }
+
+    console.log(`[v0] ✓ All ${photoIds.length} photos verified to belong to user ${user.id}`)
+
     // Prepare n8n webhook payload
     const n8nPayload = {
       user: {

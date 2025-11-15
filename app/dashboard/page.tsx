@@ -18,6 +18,7 @@ import { LogoutButton } from "@/components/logout-button"
 import { FaceProfilesSection } from "@/components/face-profiles-section"
 import { QueueNotificationBanner } from "@/components/queue-notification-banner"
 import { FavoriteButton } from "@/components/favorite-button"
+import { AlbumCard } from "@/components/album-card"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -262,50 +263,7 @@ export default async function DashboardPage() {
           {albums && albums.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {albums.map((album) => (
-                <Card
-                  key={album.id}
-                  className="group overflow-hidden border-white/20 bg-white/60 backdrop-blur-sm transition-all hover:shadow-lg"
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden">
-                    <img
-                      src={album.cover_image_url || "/placeholder.svg"}
-                      alt={album.album_title}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                    {/* Favorite Button - Top Right Corner */}
-                    <div className="absolute top-3 right-3 z-10">
-                      <FavoriteButton
-                        itemId={album.id}
-                        itemType="album"
-                        initialIsFavorite={album.is_favorite || false}
-                        variant="ghost"
-                        size="icon"
-                        showLabel={false}
-                      />
-                    </div>
-                    <div className="absolute bottom-4 left-4 right-4 translate-y-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-                      <Link href={`/albums/${album.id}`}>
-                        <Button size="sm" className="w-full bg-white text-foreground hover:bg-white/90">
-                          View Album
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{album.album_title}</CardTitle>
-                    <CardDescription className="flex items-center gap-4 text-sm">
-                      <span className="flex items-center gap-1">
-                        <ImageIcon className="h-4 w-4" />
-                        {album.photo_count} photos
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        {new Date(album.created_at).toLocaleDateString()}
-                      </span>
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
+                <AlbumCard key={album.id} album={album} />
               ))}
             </div>
           ) : (

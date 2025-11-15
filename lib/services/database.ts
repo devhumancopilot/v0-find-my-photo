@@ -12,6 +12,7 @@ export interface PhotoInsertData {
   size: number
   caption: string
   embedding: number[]
+  embedding_clip?: number[] // Optional: 512D CLIP embeddings
   user_id: string
   data?: string // Optional base64 data
   album_id?: number | null
@@ -93,6 +94,12 @@ export async function insertPhoto(photoData: PhotoInsertData, supabaseClient?: a
       embedding: JSON.stringify(photoData.embedding), // pgvector expects string format
       user_id: photoData.user_id,
       album_id: photoData.album_id || null,
+    }
+
+    // Add CLIP embeddings if provided (512D)
+    if (photoData.embedding_clip) {
+      insertData.embedding_clip = JSON.stringify(photoData.embedding_clip)
+      console.log(`[Database] Saving CLIP embedding: ${photoData.embedding_clip.length}D`)
     }
 
     // Only include base64 data if configured

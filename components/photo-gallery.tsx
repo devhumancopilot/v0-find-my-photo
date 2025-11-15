@@ -1,9 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { FavoriteButton } from "@/components/favorite-button"
-import { ImageIcon, Calendar, FileText, HardDrive } from "lucide-react"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
+import { ImageIcon, Calendar, FileText, HardDrive, Trash2 } from "lucide-react"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
 interface Photo {
   id: number
@@ -22,6 +27,11 @@ interface PhotoGalleryProps {
 }
 
 export function PhotoGallery({ photos }: PhotoGalleryProps) {
+  const router = useRouter()
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [photoToDelete, setPhotoToDelete] = useState<Photo | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const formatFileSize = (bytes: number | null): string => {
     if (!bytes) return "Unknown"
     if (bytes < 1024) return `${bytes} B`
@@ -41,6 +51,49 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
       })
     } catch {
       return "Unknown date"
+    }
+  }
+
+  const handleDeleteClick = (photo: Photo) => {
+    setPhotoToDelete(photo)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!photoToDelete) return
+
+    setIsDeleting(true)
+
+    try {
+      const response = await fetch("/api/photos/delete", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ photoId: photoToDelete.id }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to delete photo")
+      }
+
+      toast.success("Photo Deleted", {
+        description: `${photoToDelete.name} has been permanently deleted.`,
+      })
+
+      setDeleteDialogOpen(false)
+      setPhotoToDelete(null)
+
+      // Refresh the page to show updated photo list
+      router.refresh()
+    } catch (error) {
+      console.error("Delete photo error:", error)
+      toast.error("Delete Failed", {
+        description: error instanceof Error ? error.message : "Failed to delete photo. Please try again.",
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -110,6 +163,18 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
                 </Badge>
               </div>
             )}
+            {/* Delete Button - Bottom Right Corner */}
+            <div className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="destructive"
+                size="icon"
+                className="h-9 w-9 bg-red-600 hover:bg-red-700"
+                onClick={() => handleDeleteClick(photo)}
+                title="Delete photo"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Photo Metadata */}
@@ -145,6 +210,17 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
           </CardContent>
         </Card>
       ))}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Photo?"
+        description={`Are you sure you want to delete "${photoToDelete?.name}"? This will permanently remove the photo from your library and all albums.`}
+        isDeleting={isDeleting}
+        itemType="photo"
+      />
     </div>
   )
 }
