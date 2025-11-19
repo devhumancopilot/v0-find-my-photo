@@ -29,30 +29,30 @@ A FastAPI service that provides CLIP (Contrastive Language-Image Pre-training) e
 ## 🔌 API Endpoints
 
 ### Health Check
-```bash
+\`\`\`bash
 GET /health
-```
+\`\`\`
 
 ### Text Embedding
-```bash
+\`\`\`bash
 POST /embed/text
 Content-Type: application/json
 
 {
   "text": "a photo of a dog"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "embedding": [0.123, -0.456, ...],
   "dimensions": 512
 }
-```
+\`\`\`
 
 ### Image Embedding
-```bash
+\`\`\`bash
 POST /embed/image
 Content-Type: application/json
 
@@ -60,15 +60,15 @@ Content-Type: application/json
   "image": "base64_encoded_image_data",
   "mime_type": "image/jpeg"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "embedding": [0.789, -0.234, ...],
   "dimensions": 512
 }
-```
+\`\`\`
 
 ## 📖 Interactive Documentation
 
@@ -77,7 +77,7 @@ Visit `/docs` for interactive API documentation powered by Swagger UI.
 ## 🧪 Example Usage
 
 ### Python
-```python
+\`\`\`python
 import requests
 import base64
 
@@ -97,10 +97,10 @@ response = requests.post(
     json={"image": image_base64}
 )
 embedding = response.json()["embedding"]
-```
+\`\`\`
 
 ### JavaScript
-```javascript
+\`\`\`javascript
 // Text embedding
 const response = await fetch('https://YOUR-SPACE-URL.hf.space/embed/text', {
   method: 'POST',
@@ -117,7 +117,7 @@ const response = await fetch('https://YOUR-SPACE-URL.hf.space/embed/image', {
   body: JSON.stringify({ image: base64Image })
 });
 const { embedding } = await response.json();
-```
+\`\`\`
 
 ## 🔒 CORS
 

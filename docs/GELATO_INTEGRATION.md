@@ -27,10 +27,10 @@ This integration allows users to order professional-quality physical photo album
 
 Add the following to your `.env` file:
 
-```bash
+\`\`\`bash
 GELATO_API_KEY=your-gelato-api-key-here
 GELATO_API_BASE_URL=https://order.gelatoapis.com
-```
+\`\`\`
 
 ### 3. Set Up Supabase Storage (For PDF Files)
 
@@ -66,7 +66,7 @@ Make sure to use the test API key during development!
 
 ### Technical Flow
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────┐
 │                     GELATO INTEGRATION FLOW                      │
 └─────────────────────────────────────────────────────────────────┘
@@ -95,11 +95,11 @@ Make sure to use the test API key during development!
 9. Order confirmation shown to user
    ↓
 10. User can track order at /orders page
-```
+\`\`\`
 
 ## File Structure
 
-```
+\`\`\`
 lib/gelato/
 ├── types.ts          # TypeScript type definitions for Gelato API
 ├── client.ts         # API client for making requests to Gelato
@@ -119,13 +119,13 @@ app/orders/
 
 Database:
 └── print_orders      # Table for tracking orders
-```
+\`\`\`
 
 ## Database Schema
 
 ### print_orders Table
 
-```sql
+\`\`\`sql
 CREATE TABLE print_orders (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id),
@@ -167,7 +167,7 @@ CREATE TABLE print_orders (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-```
+\`\`\`
 
 ## Available Products
 
@@ -219,7 +219,7 @@ Pricing is fetched dynamically from Gelato based on:
 Get available photo book products.
 
 **Response:**
-```json
+\`\`\`json
 {
   "products": [
     {
@@ -234,14 +234,14 @@ Get available photo book products.
   ],
   "count": 4
 }
-```
+\`\`\`
 
 ### POST /api/gelato/quote
 
 Get a pricing quote.
 
 **Request:**
-```json
+\`\`\`json
 {
   "productUid": "photobooks-hardcover_pf_...",
   "pageCount": 48,
@@ -250,10 +250,10 @@ Get a pricing quote.
   "city": "New York",
   "postCode": "10001"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "quote": {
@@ -266,14 +266,14 @@ Get a pricing quote.
     "shippingMethod": "standard"
   }
 }
-```
+\`\`\`
 
 ### POST /api/gelato/order
 
 Place an order.
 
 **Request:**
-```json
+\`\`\`json
 {
   "albumId": 123,
   "productUid": "photobooks-hardcover_pf_...",
@@ -294,10 +294,10 @@ Place an order.
   "shippingCost": 7.50,
   "totalCost": 27.49
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "order": {
@@ -309,14 +309,14 @@ Place an order.
     "totalCost": 27.49
   }
 }
-```
+\`\`\`
 
 ### GET /api/gelato/order?orderId=456
 
 Get order status.
 
 **Response:**
-```json
+\`\`\`json
 {
   "order": {
     "id": 456,
@@ -326,7 +326,7 @@ Get order status.
     ...
   }
 }
-```
+\`\`\`
 
 ## TODO: PDF Generation
 
@@ -345,7 +345,7 @@ Currently, the integration has a placeholder for PDF generation. You need to imp
    - Single multi-page PDF file
 
 3. **Recommended approach**:
-   ```typescript
+   \`\`\`typescript
    // Create API route: /api/gelato/generate-pdf
    import puppeteer from 'puppeteer'
 
@@ -384,23 +384,23 @@ Currently, the integration has a placeholder for PDF generation. You need to imp
 
      return NextResponse.json({ fileUrl: publicUrl })
    }
-   ```
+   \`\`\`
 
 ## Testing
 
 ### Test the Integration
 
 1. **Start the development server**:
-   ```bash
+   \`\`\`bash
    npm run dev
-   ```
+   \`\`\`
 
 2. **Create a test album** with photos
 
 3. **Go to print preview**:
-   ```
+   \`\`\`
    http://localhost:3000/albums/[album-id]/print
-   ```
+   \`\`\`
 
 4. **Click "Order Physical Print"**
 
@@ -412,9 +412,9 @@ Currently, the integration has a placeholder for PDF generation. You need to imp
    - Place order (will fail without PDF generation implemented)
 
 6. **Check orders page**:
-   ```
+   \`\`\`
    http://localhost:3000/orders
-   ```
+   \`\`\`
 
 ### Common Issues
 

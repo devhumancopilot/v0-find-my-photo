@@ -37,14 +37,14 @@
 
 ### Option B: Git
 
-```bash
+\`\`\`bash
 git clone https://huggingface.co/spaces/YOUR-USERNAME/clip-inference-api
 cd clip-inference-api
 cp ../hf-space-clip-service/* .
 git add .
 git commit -m "Deploy CLIP API"
 git push
-```
+\`\`\`
 
 ---
 
@@ -52,12 +52,12 @@ git push
 
 Your Space will build automatically. Watch for:
 
-```
+\`\`\`
 ✅ Building Docker image...
 ✅ Installing dependencies...
 ✅ Loading CLIP model...
 ✅ Running on http://0.0.0.0:7860
-```
+\`\`\`
 
 Status changes: **Building** → **Running**
 
@@ -70,18 +70,18 @@ Status changes: **Building** → **Running**
 Your URL: `https://YOUR-USERNAME-clip-inference-api.hf.space`
 
 ### Test Health:
-```bash
+\`\`\`bash
 curl https://YOUR-USERNAME-clip-inference-api.hf.space/health
-```
+\`\`\`
 
 Expected:
-```json
+\`\`\`json
 {
   "status": "healthy",
   "model_loaded": true,
   "device": "cpu"
 }
-```
+\`\`\`
 
 ### Interactive Docs:
 Visit: `https://YOUR-USERNAME-clip-inference-api.hf.space/docs`
@@ -95,29 +95,29 @@ Try the endpoints in your browser! 🎉
 ### 1. Add Environment Variables
 
 In your `.env.local`:
-```bash
+\`\`\`bash
 CLIP_SERVICE_URL=https://YOUR-USERNAME-clip-inference-api.hf.space
 EMBEDDING_PROVIDER=huggingface
-```
+\`\`\`
 
 **Replace `YOUR-USERNAME` with your actual HF username!**
 
 ### 2. Restart Dev Server
 
-```bash
+\`\`\`bash
 # Stop current server (Ctrl+C)
 # Restart
 npm run dev
-```
+\`\`\`
 
 ### 3. Test It
 
 Upload a photo in your app and check the logs:
 
-```
+\`\`\`
 [HuggingFace][CLIP] Service: HF Spaces
 [HuggingFace][CLIP] ✅ SUCCESS - Generated 512-dimensional CLIP image embedding
-```
+\`\`\`
 
 ---
 

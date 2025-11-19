@@ -10,7 +10,7 @@ This implementation adds **automatic fallback** to local webhook handlers when N
 
 ### Flow Diagram
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────┐
 │                     User Request                             │
 │               (Upload, Search, Create Album)                 │
@@ -48,13 +48,13 @@ This implementation adds **automatic fallback** to local webhook handlers when N
                    │  OpenAI + Supabase    │
                    │  (Processing Layer)   │
                    └───────────────────────┘
-```
+\`\`\`
 
 ---
 
 ## File Structure
 
-```
+\`\`\`
 lib/
 ├── services/                    (NEW - Service layer)
 │   ├── openai.ts               → Image captioning + embeddings
@@ -74,7 +74,7 @@ app/api/
     │   └── route.ts
     └── album-finalized/
         └── route.ts
-```
+\`\`\`
 
 ---
 
@@ -84,7 +84,7 @@ app/api/
 
 Add these to your `.env.local`:
 
-```bash
+\`\`\`bash
 # -----------------------------------------------------------------------------
 # Local Webhook Configuration (Fallback System)
 # -----------------------------------------------------------------------------
@@ -109,7 +109,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 # Store base64 in database (not recommended, increases DB size)
 STORE_BASE64_IN_DB=false
-```
+\`\`\`
 
 ---
 
@@ -117,54 +117,54 @@ STORE_BASE64_IN_DB=false
 
 ### 1. Install Dependencies
 
-```bash
+\`\`\`bash
 npm install openai
-```
+\`\`\`
 
 ### 2. Add OpenAI API Key
 
 1. Get your API key from https://platform.openai.com/api-keys
 2. Add to `.env.local`:
-   ```bash
+   \`\`\`bash
    OPENAI_API_KEY=sk-...your-key-here
-   ```
+   \`\`\`
 
 ### 3. Verify Supabase Environment Variables
 
 Ensure these are set in `.env.local`:
 
-```bash
+\`\`\`bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-```
+\`\`\`
 
 ### 4. Test the System
 
 #### Test Scenario 1: N8N Working (Default)
-```bash
+\`\`\`bash
 # .env.local
 USE_LOCAL_WEBHOOKS=false
 ENABLE_WEBHOOK_FALLBACK=true
 
 # Result: Uses N8N, fallback available if N8N fails
-```
+\`\`\`
 
 #### Test Scenario 2: Force Local Webhooks
-```bash
+\`\`\`bash
 # .env.local
 USE_LOCAL_WEBHOOKS=true
 
 # Result: Skips N8N entirely, uses local handlers
-```
+\`\`\`
 
 #### Test Scenario 3: N8N Only (No Fallback)
-```bash
+\`\`\`bash
 # .env.local
 USE_LOCAL_WEBHOOKS=false
 ENABLE_WEBHOOK_FALLBACK=false
 
 # Result: Uses N8N only, fails if N8N fails
-```
+\`\`\`
 
 ---
 
@@ -261,13 +261,13 @@ ENABLE_WEBHOOK_FALLBACK=false
 ### Example Log Output
 
 **Successful N8N:**
-```
+\`\`\`
 [v0] Attempting N8N webhook: https://sandbox-n8n.fly.dev/webhook/manual-upload
 [v0] N8N webhook succeeded
-```
+\`\`\`
 
 **N8N Failed, Fallback Success:**
-```
+\`\`\`
 [v0] Attempting N8N webhook: https://sandbox-n8n.fly.dev/webhook/manual-upload
 [v0] N8N webhook failed: Error: Webhook failed with status 500
 [v0] Attempting fallback to local webhook handler
@@ -283,7 +283,7 @@ ENABLE_WEBHOOK_FALLBACK=false
 [Fallback] Inserting beach.jpg into database
 [Fallback] Successfully processed beach.jpg (ID: 42)
 [v0] Local webhook succeeded
-```
+\`\`\`
 
 ---
 
@@ -302,24 +302,24 @@ ENABLE_WEBHOOK_FALLBACK=false
 ## Error Handling
 
 ### N8N Fails, Fallback Succeeds
-```json
+\`\`\`json
 {
   "success": true,
   "processed_count": 3,
   "photo_ids": [42, 43, 44]
 }
-```
+\`\`\`
 
 ### N8N Fails, Fallback Also Fails
-```json
+\`\`\`json
 {
   "success": false,
   "error": "N8N and fallback both failed. N8N: Connection timeout. Fallback: OpenAI API key invalid"
 }
-```
+\`\`\`
 
 ### Partial Success (Some Images Failed)
-```json
+\`\`\`json
 {
   "success": true,
   "processed_count": 2,
@@ -327,24 +327,24 @@ ENABLE_WEBHOOK_FALLBACK=false
   "photo_ids": [42, 43],
   "errors": ["Failed to process image3.jpg: Caption generation timeout"]
 }
-```
+\`\`\`
 
 ---
 
 ## Migration Path
 
 ### Phase 1: Enable Fallback (Current)
-```bash
+\`\`\`bash
 USE_LOCAL_WEBHOOKS=false
 ENABLE_WEBHOOK_FALLBACK=true
-```
+\`\`\`
 - N8N primary, local fallback for failures
 - Test fallback system in production
 
 ### Phase 2: Test Local-Only Mode
-```bash
+\`\`\`bash
 USE_LOCAL_WEBHOOKS=true
-```
+\`\`\`
 - Runs entirely on Next.js
 - Evaluate performance and cost
 

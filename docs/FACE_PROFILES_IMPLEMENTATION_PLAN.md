@@ -12,7 +12,7 @@ Implement automatic face detection and recognition system that:
 
 ## Architecture
 
-```
+\`\`\`
 Photo Upload
     ↓
 Face Detection (face-api.js)
@@ -27,7 +27,7 @@ Compare with Existing Embeddings
 Store in face_profiles table
     ↓
 User reviews Face Profiles UI → Assigns names manually
-```
+\`\`\`
 
 ---
 
@@ -55,7 +55,7 @@ User reviews Face Profiles UI → Assigns names manually
 
 ### New Table: `face_profiles`
 
-```sql
+\`\`\`sql
 CREATE TABLE public.face_profiles (
   -- Primary Key
   id bigserial PRIMARY KEY,
@@ -122,11 +122,11 @@ CREATE TRIGGER set_face_profiles_updated_at
   BEFORE UPDATE ON public.face_profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
-```
+\`\`\`
 
 ### Similarity Search Function
 
-```sql
+\`\`\`sql
 -- Find similar faces using cosine similarity
 CREATE OR REPLACE FUNCTION match_faces(
   query_embedding vector(128),
@@ -158,7 +158,7 @@ BEGIN
   LIMIT match_limit;
 END;
 $$;
-```
+\`\`\`
 
 ---
 
@@ -168,11 +168,11 @@ $$;
 
 #### 1.1 Install Dependencies
 
-```bash
+\`\`\`bash
 npm install @vladmandic/face-api
 npm install @tensorflow/tfjs-node  # For server-side processing
 npm install canvas  # Required for Node.js image processing
-```
+\`\`\`
 
 #### 1.2 Download Model Files
 
@@ -191,7 +191,7 @@ Store in: `public/models/` or download dynamically
 
 #### 2.1 Create `lib/services/face-detection.ts`
 
-```typescript
+\`\`\`typescript
 import * as faceapi from '@vladmandic/face-api'
 import * as tf from '@tensorflow/tfjs-node'
 import { Canvas, Image, ImageData } from 'canvas'
@@ -275,13 +275,13 @@ export async function findMatchingFace(
   // Implementation in database.ts
   return null  // Placeholder
 }
-```
+\`\`\`
 
 #### 2.2 Update `lib/services/database.ts`
 
 Add face profile operations:
 
-```typescript
+\`\`\`typescript
 export interface FaceProfileInsertData {
   photo_id: number
   user_id: string
@@ -394,7 +394,7 @@ export async function getFaceProfiles(userId: string) {
   if (error) throw new Error(`Failed to fetch face profiles: ${error.message}`)
   return data
 }
-```
+\`\`\`
 
 ---
 
@@ -404,7 +404,7 @@ export async function getFaceProfiles(userId: string) {
 
 Add face detection after photo upload:
 
-```typescript
+\`\`\`typescript
 // After inserting photo into database...
 console.log(`[Fallback] Detecting faces in ${name}`)
 
@@ -455,7 +455,7 @@ try {
   console.error(`[Fallback] Face detection failed for ${name}:`, faceError)
   // Continue - don't fail photo upload if face detection fails
 }
-```
+\`\`\`
 
 ---
 
@@ -465,7 +465,7 @@ try {
 
 `app/api/face-profiles/route.ts`:
 
-```typescript
+\`\`\`typescript
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -486,13 +486,13 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ profiles: grouped })
 }
-```
+\`\`\`
 
 #### 4.2 Update Face Name
 
 `app/api/face-profiles/[id]/route.ts`:
 
-```typescript
+\`\`\`typescript
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -510,13 +510,13 @@ export async function PATCH(
 
   return NextResponse.json({ success: true })
 }
-```
+\`\`\`
 
 #### 4.3 Bulk Update Face Names
 
 `app/api/face-profiles/bulk-update/route.ts`:
 
-```typescript
+\`\`\`typescript
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -540,7 +540,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ success: true, updated_count: face_profile_ids.length })
 }
-```
+\`\`\`
 
 ---
 
@@ -558,7 +558,7 @@ Features:
 - Show photo thumbnails with face bounding boxes
 
 UI Layout:
-```
+\`\`\`
 ┌─────────────────────────────────────────┐
 │  Face Profiles                          │
 ├─────────────────────────────────────────┤
@@ -580,7 +580,7 @@ UI Layout:
 │  └───┴───┴───┴───┴───┘                 │
 │  [Edit Name] [Merge]                    │
 └─────────────────────────────────────────┘
-```
+\`\`\`
 
 ---
 
@@ -590,12 +590,12 @@ UI Layout:
 
 Add to `.env.local`:
 
-```bash
+\`\`\`bash
 # Face Detection Configuration
 ENABLE_FACE_DETECTION=true
 FACE_MATCHING_THRESHOLD=0.6  # Distance threshold (0.0 = identical, 1.0 = different)
 FACE_MIN_CONFIDENCE=0.5  # Minimum detection confidence
-```
+\`\`\`
 
 ---
 
@@ -647,28 +647,28 @@ FACE_MIN_CONFIDENCE=0.5  # Minimum detection confidence
 ## Migration Strategy
 
 ### Step 1: Database Migration
-```bash
+\`\`\`bash
 # Create face_profiles table
 npm run supabase:migration create face_profiles
-```
+\`\`\`
 
 ### Step 2: Install Dependencies
-```bash
+\`\`\`bash
 npm install @vladmandic/face-api @tensorflow/tfjs-node canvas
-```
+\`\`\`
 
 ### Step 3: Download Models
-```bash
+\`\`\`bash
 # Download to public/models/
 # Or use CDN in production
-```
+\`\`\`
 
 ### Step 4: Feature Flag
-```bash
+\`\`\`bash
 # Enable gradually
 ENABLE_FACE_DETECTION=false  # Start disabled
 ENABLE_FACE_DETECTION=true   # Enable after testing
-```
+\`\`\`
 
 ---
 

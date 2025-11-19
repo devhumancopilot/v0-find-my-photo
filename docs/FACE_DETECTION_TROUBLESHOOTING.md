@@ -5,27 +5,27 @@
 ### 1. TextEncoder is not a constructor
 
 **Error:**
-```
+\`\`\`
 TypeError: this.util.TextEncoder is not a constructor
 at node_modules/@vladmandic/face-api/dist/face-api.esm.js:138
-```
+\`\`\`
 
 **Solution:**
 This has been fixed in `lib/services/face-detection.ts` by adding TextEncoder polyfills for Node.js. If you still encounter this:
 
 1. Make sure you're using Node.js 18 or higher
 2. Clear your `.next` folder and rebuild:
-   ```bash
+   \`\`\`bash
    rm -rf .next
    npm run dev
-   ```
+   \`\`\`
 
 ### 2. Face Models Not Found
 
 **Error:**
-```
+\`\`\`
 [FaceAPI] Failed to load models: ENOENT: no such file or directory
-```
+\`\`\`
 
 **Solution:**
 1. Ensure face-api models are in `public/models/` directory
@@ -38,25 +38,25 @@ This has been fixed in `lib/services/face-detection.ts` by adding TextEncoder po
    - `face_recognition_model-shard1`
 
 3. Download models if missing:
-   ```bash
+   \`\`\`bash
    # Download from face-api.js repository
    wget https://github.com/vladmandic/face-api/raw/master/model/ssd_mobilenetv1_model-weights_manifest.json -P public/models/
    # ... repeat for all required files
-   ```
+   \`\`\`
 
 ### 3. Disable Face Detection During Development
 
 If face detection is causing issues, you can temporarily disable it:
 
 1. Add to `.env.local`:
-   ```
+   \`\`\`
    ENABLE_FACE_DETECTION=false
-   ```
+   \`\`\`
 
 2. Restart your development server:
-   ```bash
+   \`\`\`bash
    npm run dev
-   ```
+   \`\`\`
 
 ### 4. Webhook Fallback Not Working
 
@@ -67,16 +67,16 @@ If face detection is causing issues, you can temporarily disable it:
 **Check:**
 
 1. **Environment Variables:**
-   ```bash
+   \`\`\`bash
    USE_LOCAL_WEBHOOKS=true  # Use local handlers instead of N8N
    ENABLE_WEBHOOK_FALLBACK=true  # Enable automatic fallback
-   ```
+   \`\`\`
 
 2. **Local Webhook URL:**
    Ensure `NEXT_PUBLIC_APP_URL` is set correctly:
-   ```
+   \`\`\`
    NEXT_PUBLIC_APP_URL=http://localhost:3000
-   ```
+   \`\`\`
 
 3. **Check Console Logs:**
    Look for detailed error messages in the terminal where you ran `npm run dev`
@@ -86,10 +86,10 @@ If face detection is causing issues, you can temporarily disable it:
 Face detection can be memory-intensive. If you encounter out-of-memory errors:
 
 1. **Increase Node.js memory limit:**
-   ```bash
+   \`\`\`bash
    # In package.json, update scripts:
    "dev": "NODE_OPTIONS='--max-old-space-size=4096' next dev"
-   ```
+   \`\`\`
 
 2. **Process images in smaller batches:**
    The webhook handler already processes images sequentially to avoid overload.
@@ -120,24 +120,24 @@ Face detection can be memory-intensive. If you encounter out-of-memory errors:
 ### Test Locally
 
 1. Enable face detection:
-   ```bash
+   \`\`\`bash
    echo "ENABLE_FACE_DETECTION=true" >> .env.local
-   ```
+   \`\`\`
 
 2. Upload a test photo through the app
 
 3. Check console logs for face detection output:
-   ```
+   \`\`\`
    [FaceAPI] Loading models from: /path/to/public/models
    [FaceAPI] Models loaded successfully
    [FaceAPI] Detecting faces in image...
    [FaceAPI] Detected 2 faces
-   ```
+   \`\`\`
 
 4. Verify in database:
-   ```sql
+   \`\`\`sql
    SELECT * FROM face_profiles WHERE user_id = 'your-user-id';
-   ```
+   \`\`\`
 
 ## Performance Tips
 

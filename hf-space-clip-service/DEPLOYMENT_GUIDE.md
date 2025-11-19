@@ -34,7 +34,7 @@ You have 2 options:
 
 #### Option A: Git (Recommended)
 
-```bash
+\`\`\`bash
 # Clone your space
 git clone https://huggingface.co/spaces/YOUR-USERNAME/clip-inference-api
 cd clip-inference-api
@@ -52,7 +52,7 @@ cp /path/to/hf-space-clip-service/* .
 git add .
 git commit -m "Initial CLIP inference API"
 git push
-```
+\`\`\`
 
 #### Option B: Web Upload (Easier)
 
@@ -72,13 +72,13 @@ git push
 1. Your Space will automatically start building
 2. You'll see build logs in real-time
 3. Look for:
-   ```
+   \`\`\`
    Building Docker image...
    Installing dependencies...
    Loading CLIP model...
    ✅ CLIP model loaded successfully!
    Running on http://0.0.0.0:7860
-   ```
+   \`\`\`
 
 4. Status will change from **Building** → **Running**
 
@@ -97,19 +97,19 @@ Your Space URL is: `https://YOUR-USERNAME-clip-inference-api.hf.space`
 #### Test Endpoints
 
 **1. Health Check:**
-```bash
+\`\`\`bash
 curl https://YOUR-USERNAME-clip-inference-api.hf.space/health
-```
+\`\`\`
 
 Expected response:
-```json
+\`\`\`json
 {
   "status": "healthy",
   "model_loaded": true,
   "device": "cpu",
   "model_name": "openai/clip-vit-base-patch32"
 }
-```
+\`\`\`
 
 **2. Interactive Docs:**
 
@@ -118,21 +118,21 @@ Visit: `https://YOUR-USERNAME-clip-inference-api.hf.space/docs`
 You can test all endpoints directly in the browser!
 
 **3. Text Embedding:**
-```bash
+\`\`\`bash
 curl -X POST https://YOUR-USERNAME-clip-inference-api.hf.space/embed/text \
   -H "Content-Type: application/json" \
   -d '{"text": "a photo of a dog"}'
-```
+\`\`\`
 
 **4. Image Embedding:**
-```bash
+\`\`\`bash
 # First, convert image to base64
 BASE64_IMG=$(base64 -w 0 your-image.jpg)
 
 curl -X POST https://YOUR-USERNAME-clip-inference-api.hf.space/embed/image \
   -H "Content-Type: application/json" \
   -d "{\"image\": \"$BASE64_IMG\"}"
-```
+\`\`\`
 
 ---
 
@@ -143,16 +143,16 @@ Now update your main app to use the CLIP service.
 #### Update Environment Variable
 
 Add to your `.env.local`:
-```bash
+\`\`\`bash
 CLIP_SERVICE_URL=https://YOUR-USERNAME-clip-inference-api.hf.space
 EMBEDDING_PROVIDER=huggingface
-```
+\`\`\`
 
 #### Update `lib/services/huggingface.ts`
 
 Replace the API calls with your HF Space endpoint:
 
-```typescript
+\`\`\`typescript
 const CLIP_SERVICE_URL = process.env.CLIP_SERVICE_URL || ""
 
 export async function generateCLIPImageEmbedding(base64: string, mimeType: string): Promise<number[]> {
@@ -232,11 +232,11 @@ export async function generateCLIPTextEmbedding(text: string): Promise<number[]>
     throw new Error(`Failed to generate CLIP text embedding: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
-```
+\`\`\`
 
 #### Deploy to Vercel
 
-```bash
+\`\`\`bash
 # Add environment variable to Vercel
 vercel env add CLIP_SERVICE_URL production
 
@@ -249,14 +249,14 @@ vercel env add EMBEDDING_PROVIDER production
 
 # Redeploy
 vercel --prod
-```
+\`\`\`
 
 ---
 
 ## ✅ You're Done!
 
 Your setup:
-```
+\`\`\`
 User Request
      ↓
 Vercel App (Next.js)
@@ -264,7 +264,7 @@ Vercel App (Next.js)
 HF Spaces (CLIP API) - FREE ✅
      ↓
 Returns Embeddings
-```
+\`\`\`
 
 ---
 
@@ -354,7 +354,7 @@ HF Spaces offers always-on hardware starting at $0.60/hour
 ### Add API Key Authentication (Advanced)
 Edit `app.py` to require API key:
 
-```python
+\`\`\`python
 from fastapi import Header, HTTPException
 
 async def verify_api_key(x_api_key: str = Header(...)):
@@ -364,14 +364,14 @@ async def verify_api_key(x_api_key: str = Header(...)):
 @app.post("/embed/text", dependencies=[Depends(verify_api_key)])
 async def embed_text(request: TextEmbeddingRequest):
     # ... rest of code
-```
+\`\`\`
 
 Then pass key from Vercel:
-```typescript
+\`\`\`typescript
 headers: {
   "X-API-Key": process.env.CLIP_API_KEY
 }
-```
+\`\`\`
 
 ---
 

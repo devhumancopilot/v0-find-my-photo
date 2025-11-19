@@ -6,7 +6,7 @@ The PDF generation system uses Puppeteer to create print-ready PDF files from ph
 
 ## Architecture
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────┐
 │                  PDF Generation Flow                     │
 └─────────────────────────────────────────────────────────┘
@@ -26,7 +26,7 @@ The PDF generation system uses Puppeteer to create print-ready PDF files from ph
 7. Public URL returned to frontend
    ↓
 8. Frontend submits order to Gelato with PDF URL
-```
+\`\`\`
 
 ## Implementation Files
 
@@ -68,15 +68,15 @@ REST endpoint for PDF generation.
 **Endpoint:** `POST /api/gelato/generate-pdf`
 
 **Request:**
-```json
+\`\`\`json
 {
   "albumId": 123,
   "layoutTemplate": "grid-2x2"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "fileUrl": "https://xtarrhnroghlnyiaxsrd.supabase.co/storage/v1/object/public/print-files/album-123-xxx.pdf",
@@ -84,7 +84,7 @@ REST endpoint for PDF generation.
   "fileSize": 2456789,
   "photoCount": 24
 }
-```
+\`\`\`
 
 ## PDF Specifications
 
@@ -119,7 +119,7 @@ Every PDF includes:
 
 ### Browser Settings
 
-```typescript
+\`\`\`typescript
 await puppeteer.launch({
   headless: true,
   args: [
@@ -129,7 +129,7 @@ await puppeteer.launch({
     '--disable-gpu',
   ],
 })
-```
+\`\`\`
 
 **Why these args:**
 - `--no-sandbox`: Required for some hosting environments
@@ -139,13 +139,13 @@ await puppeteer.launch({
 
 ### Viewport Settings
 
-```typescript
+\`\`\`typescript
 await page.setViewport({
   width: 2550,  // 8.5 inches at 300 DPI
   height: 3300, // 11 inches at 300 DPI
   deviceScaleFactor: 2, // High resolution rendering
 })
-```
+\`\`\`
 
 **Why these settings:**
 - Ensures high-quality image rendering
@@ -154,7 +154,7 @@ await page.setViewport({
 
 ### PDF Generation
 
-```typescript
+\`\`\`typescript
 await page.pdf({
   format: 'Letter',
   printBackground: true,
@@ -168,7 +168,7 @@ await page.pdf({
   scale: 1,
   displayHeaderFooter: false,
 })
-```
+\`\`\`
 
 ## Image Handling
 
@@ -176,7 +176,7 @@ await page.pdf({
 
 The generator waits for all images to load:
 
-```typescript
+\`\`\`typescript
 await page.evaluate(() => {
   return Promise.all(
     Array.from(document.images)
@@ -189,7 +189,7 @@ await page.evaluate(() => {
       )
   )
 })
-```
+\`\`\`
 
 **Benefits:**
 - Ensures no missing images in PDF
@@ -215,9 +215,9 @@ Images are rendered at full resolution:
 - Auto-created if doesn't exist
 
 **File Naming:**
-```
+\`\`\`
 album-{albumId}-{timestamp}-{random}.pdf
-```
+\`\`\`
 
 Example: `album-123-1737068400000-abc123.pdf`
 
@@ -230,7 +230,7 @@ Currently, PDFs are kept indefinitely. Consider implementing:
 3. **Manual cleanup** - Admin interface to manage old files
 
 **Example cleanup function:**
-```typescript
+\`\`\`typescript
 async function cleanupOldPDFs() {
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
@@ -247,7 +247,7 @@ async function cleanupOldPDFs() {
     await deleteFileFromStorage(file.name)
   }
 }
-```
+\`\`\`
 
 ## Performance
 
@@ -288,21 +288,21 @@ Puppeteer can use significant memory:
 ### Common Errors
 
 **1. Image Load Failures**
-```
+\`\`\`
 Error: Failed to load image: https://...
-```
+\`\`\`
 **Solution:** Ensure image URLs are accessible, implement retry logic
 
 **2. Memory Issues**
-```
+\`\`\`
 Error: Protocol error: Target closed
-```
+\`\`\`
 **Solution:** Increase server memory, reduce concurrent requests
 
 **3. Upload Failures**
-```
+\`\`\`
 Error: Failed to upload PDF
-```
+\`\`\`
 **Solution:** Check Supabase connection, verify bucket permissions
 
 ### Error Recovery
@@ -317,7 +317,7 @@ The system handles errors gracefully:
 
 ### Unit Tests (TODO)
 
-```typescript
+\`\`\`typescript
 describe('PDF Generator', () => {
   it('should generate PDF for album', async () => {
     const pdf = await generateAlbumPDF({
@@ -342,7 +342,7 @@ describe('PDF Generator', () => {
     ).rejects.toThrow()
   })
 })
-```
+\`\`\`
 
 ### Manual Testing
 
@@ -359,14 +359,14 @@ describe('PDF Generator', () => {
 
 The system logs key events:
 
-```
+\`\`\`
 [PDF Generator] Generating PDF for album 123
 [PDF Generator] Found 24 photos
 [PDF Generator] Generating PDF with Puppeteer...
 [PDF Generator] PDF generated, size: 2456789 bytes
 [PDF Generator] Uploading to storage: album-123-xxx.pdf
 [PDF Generator] PDF uploaded successfully: https://...
-```
+\`\`\`
 
 ### Metrics to Track
 
@@ -380,9 +380,9 @@ The system logs key events:
 
 ### Development
 
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
 Puppeteer downloads Chromium automatically.
 
@@ -398,7 +398,7 @@ Puppeteer downloads Chromium automatically.
 
 ### Docker Deployment
 
-```dockerfile
+\`\`\`dockerfile
 FROM node:18
 
 # Install Chromium dependencies
@@ -431,7 +431,7 @@ COPY . .
 RUN npm run build
 
 CMD ["npm", "start"]
-```
+\`\`\`
 
 ## Future Enhancements
 
