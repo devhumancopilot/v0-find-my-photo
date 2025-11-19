@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
     const serviceSupabase = createServiceRoleClient()
 
     // Get pending queue items for this user
+    // IMPORTANT: On Vercel serverless, we must await processing before returning
+    // Process only a small batch to avoid timeouts (300s max on Pro plan)
     const { data: queueItems, error: queueError } = await serviceSupabase
       .from('photo_processing_queue')
       .select('id, photo_id, retry_count')
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
       .eq('status', 'pending')
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
-      .limit(50) // Process up to 50 photos at a time
+      .limit(3) // Process only 3 photos per request to stay within Vercel timeout limits
 
     if (queueError) {
       console.error('[Process Queue] Error fetching queue:', queueError)
@@ -74,17 +76,16 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Process Queue] Found ${queueItems.length} photos to process for user ${userId}`)
 
-    // Start processing in the background
-    // Note: In production, you might want to use a job queue system like BullMQ or trigger this via cron
-    processQueueInBackground(userId, queueItems, serviceSupabase).catch((error) => {
-      console.error('[Process Queue] CRITICAL: Background processing failed completely:', error)
-      // In production, you might want to add alerting here (email, Sentry, etc.)
-    })
+    // CRITICAL: On Vercel serverless, we MUST await processing
+    // The execution context is killed after response is sent, stopping all background work
+    const results = await processQueueInBackground(userId, queueItems, serviceSupabase)
 
     return NextResponse.json({
       success: true,
-      message: 'Processing started',
+      message: 'Processing completed',
       queue_count: queueItems.length,
+      processed_count: results.processedCount,
+      failed_count: results.failedCount,
     })
   } catch (error) {
     console.error('[Process Queue] Request error:', error)
@@ -358,4 +359,10 @@ async function processQueueInBackground(
   console.log(`[Process Queue BG][BATCH-END] Results: ${processedCount} successful, ${failedCount} failed`)
   console.log(`[Process Queue BG][BATCH-END] Total: ${processedCount + failedCount}/${queueItems.length} processed`)
   console.log(`[Process Queue BG][BATCH-END] ========================================`)
+
+  return {
+    processedCount,
+    failedCount,
+    total: queueItems.length
+  }
 }
