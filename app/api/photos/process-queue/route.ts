@@ -3,8 +3,15 @@
  *
  * This endpoint processes photos from the queue in the background:
  * 1. Fetches pending photos from the queue
- * 2. Generates AI captions
- * 3. Creates embeddings for semantic search
+ * 2. Generates AI captions using OpenAI GPT-4 Vision
+ * 3. Creates embeddings for semantic search:
+ *    PURE CLIP MODE (when EMBEDDING_PROVIDER=huggingface):
+ *    - CLIP text embedding (512D) from caption → embedding field
+ *    - CLIP image embedding (512D) from image → embedding_clip field
+ *    Both in same 512D space for perfect multimodal matching!
+ *
+ *    OPENAI MODE (when EMBEDDING_PROVIDER=openai):
+ *    - OpenAI text embedding (1536D) from caption → embedding field
  * 4. Performs face detection (if enabled)
  * 5. Updates queue and photo status
  *
@@ -144,76 +151,55 @@ async function processQueueInBackground(
       const imageBuffer = await imageResponse.arrayBuffer()
       const base64Data = Buffer.from(imageBuffer).toString('base64')
 
-      // Generate caption and embedding based on provider
-      let caption: string | null
-      let embedding: number[]
+      // Step 1: Generate caption using OpenAI (always, regardless of provider)
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] 📝 Step 1: Generating caption with OpenAI GPT-4 Vision`)
+      const caption = await generateImageCaption(base64Data, photo.type)
 
-      if (embeddingConfig.supportsMultimodal) {
-        // CLIP approach: direct image embedding
-        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] 🎨 Using CLIP multimodal approach`)
-        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] -> Direct image encoding`)
-
-        embedding = await generateImageEmbedding(base64Data, photo.type)
-        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ Embedding generated: ${embedding.length}D`)
-
-        // Caption is optional for CLIP but nice to have for display
-        caption = await generateImageCaption(base64Data, photo.type)
-        if (caption) {
-          console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] Caption (optional): ${caption.substring(0, 100)}...`)
-        } else {
-          // CLIP doesn't generate captions, use a placeholder
-          caption = "Image processed with CLIP"
-        }
-      } else {
-        // OpenAI approach: caption-based
-        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] 📝 Using OpenAI caption-based approach`)
-        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] -> Step 1: Generating caption with GPT-4 Vision`)
-
-        caption = await generateImageCaption(base64Data, photo.type)
-        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] ✓ Caption: ${caption?.substring(0, 100)}...`)
-
-        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] -> Step 2: Generating embedding`)
-        embedding = await generateImageEmbedding(base64Data, photo.type)
-        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] ✓ Embedding generated: ${embedding.length}D`)
+      if (!caption) {
+        throw new Error("Failed to generate caption")
       }
 
-      // Step 2.5: Generate BOTH embeddings for hybrid search
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] ✓ Caption: ${caption.substring(0, 100)}...`)
+
+      // Step 2: Generate embeddings based on provider
       let openaiEmbedding: number[]
       let clipEmbedding: number[] | null = null
 
       if (embeddingConfig.supportsMultimodal) {
-        // Using CLIP provider - need to generate BOTH embeddings
-        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] Generating both OpenAI and CLIP embeddings`)
+        // CLIP provider - generate BOTH embeddings using CLIP (same 512D space!)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] 🎨 Generating pure CLIP embeddings`)
 
-        // We already have the caption, now generate OpenAI embedding from it
-        const { generateTextEmbedding: openaiTextEmbedding } = await import("@/lib/services/openai")
-        openaiEmbedding = await openaiTextEmbedding(caption || "No caption")
-        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] ✓ OpenAI embedding: ${openaiEmbedding.length}D`)
+        // CLIP text embedding from caption (512D) - in same space as image!
+        const { generateCLIPTextEmbedding } = await import("@/lib/services/huggingface")
+        openaiEmbedding = await generateCLIPTextEmbedding(caption)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP text embedding (caption): ${openaiEmbedding.length}D`)
 
-        // The embedding variable contains CLIP's caption-based embedding, but we need direct image embedding
-        const { generateCLIPImageEmbedding } = await import("@/lib/services/huggingface")
-        clipEmbedding = await generateCLIPImageEmbedding(base64Data, photo.type)
-        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] ✓ CLIP image embedding: ${clipEmbedding.length}D`)
+        // CLIP direct image embedding (512D) - same space!
+        clipEmbedding = await generateImageEmbedding(base64Data, photo.type)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP image embedding: ${clipEmbedding.length}D`)
       } else {
-        // Using OpenAI provider - already have the OpenAI embedding
-        openaiEmbedding = embedding
-        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] Using OpenAI embedding: ${openaiEmbedding.length}D`)
+        // OpenAI provider - caption-based approach
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] 📝 Generating OpenAI text embedding from caption`)
+
+        const { generateTextEmbedding: openaiTextEmbedding } = await import("@/lib/services/openai")
+        openaiEmbedding = await openaiTextEmbedding(caption)
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] ✓ OpenAI embedding: ${openaiEmbedding.length}D`)
       }
 
-      // Prepare update data
+      // Step 3: Prepare update data
       const updateData: any = {
-        caption,
-        embedding: JSON.stringify(openaiEmbedding), // Always 1536D OpenAI embedding
+        caption, // OpenAI GPT-4 Vision generated caption (for display)
+        embedding: JSON.stringify(openaiEmbedding), // CLIP text embedding from caption (512D) OR OpenAI (1536D)
         processing_status: 'processing', // Will be set to 'completed' after face detection
       }
 
-      // Add CLIP embedding if available
+      // Add CLIP image embedding if available (CLIP mode)
       if (clipEmbedding) {
-        updateData.embedding_clip = JSON.stringify(clipEmbedding) // 512D CLIP image embedding
-        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] Saving both embeddings - OpenAI: ${openaiEmbedding.length}D, CLIP: ${clipEmbedding.length}D`)
+        updateData.embedding_clip = JSON.stringify(clipEmbedding) // 512D CLIP direct image embedding
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ Saving both CLIP embeddings - Text: ${openaiEmbedding.length}D, Image: ${clipEmbedding.length}D`)
       }
 
-      // Step 3: Update photo with caption and embedding
+      // Step 4: Update photo with caption and embeddings
       const { error: updateError } = await supabase
         .from('photos')
         .update(updateData)
@@ -223,7 +209,7 @@ async function processQueueInBackground(
         throw new Error(`Failed to update photo: ${updateError.message}`)
       }
 
-      // Step 4: Face Detection (if enabled)
+      // Step 5: Face Detection (if enabled)
       const enableFaceDetection = process.env.ENABLE_FACE_DETECTION === "true"
 
       if (enableFaceDetection) {

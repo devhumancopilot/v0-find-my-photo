@@ -136,19 +136,22 @@ export function calculateMultiSignalScore(
   enhancedQuery: EnhancedQuery,
   allPhotos: PhotoWithMetadata[]
 ): RankedPhoto {
-  const now = new Date()
-  const photoDate = new Date(photo.created_at)
-  const daysSincePhoto = (now.getTime() - photoDate.getTime()) / (1000 * 60 * 60 * 24)
-
   // 1. Base similarity score (0-1)
   let embeddingSimilarity = photo.similarity
 
   // 2. Recency boost - favor recent photos slightly
   // Linear decay: 100% boost for today, 0% boost after 365 days
   let recencyBoost = 0
-  if (enhancedQuery.searchIntent !== "temporal") {
-    const recencyFactor = Math.max(0, 1 - daysSincePhoto / 365)
-    recencyBoost = recencyFactor * 0.1 // Max 10% boost
+  if (enhancedQuery.searchIntent !== "temporal" && photo.created_at) {
+    const now = new Date()
+    const photoDate = new Date(photo.created_at)
+
+    // Check if date is valid
+    if (!isNaN(photoDate.getTime())) {
+      const daysSincePhoto = (now.getTime() - photoDate.getTime()) / (1000 * 60 * 60 * 24)
+      const recencyFactor = Math.max(0, 1 - daysSincePhoto / 365)
+      recencyBoost = recencyFactor * 0.1 // Max 10% boost
+    }
   }
 
   // 3. Favorite boost - significant boost for favorites

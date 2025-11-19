@@ -91,24 +91,13 @@ export async function generateImageEmbedding(base64: string, mimeType: string): 
   console.log(`[Embeddings][${provider.toUpperCase()}] Image type: ${mimeType}`)
 
   if (provider === "huggingface") {
-    // HYBRID approach: OpenAI caption + CLIP text embedding
-    console.log(`[Embeddings][HYBRID] Using hybrid approach: OpenAI caption → CLIP text embedding`)
+    // CLIP approach: Direct image embedding
+    console.log(`[Embeddings][CLIP] Using CLIP direct image embedding`)
+    console.log(`[Embeddings][CLIP] Generating 512D CLIP image embedding`)
 
-    // Step 1: Generate caption using OpenAI GPT-4 Vision
-    console.log(`[Embeddings][HYBRID] Step 1: Generating caption with OpenAI GPT-4 Vision`)
-    const caption = await openaiImageCaption(base64, mimeType)
+    const embedding = await generateCLIPImageEmbedding(base64, mimeType)
 
-    if (!caption) {
-      throw new Error("Failed to generate caption for hybrid embedding")
-    }
-
-    console.log(`[Embeddings][HYBRID] Caption generated: "${caption.substring(0, 100)}..."`)
-
-    // Step 2: Embed the caption using CLIP text encoder
-    console.log(`[Embeddings][HYBRID] Step 2: Embedding caption with CLIP text encoder`)
-    const embedding = await generateCLIPTextEmbedding(caption)
-
-    console.log(`[Embeddings][HYBRID] ✅ Caption embedding generated: ${embedding.length}D`)
+    console.log(`[Embeddings][CLIP] ✅ Image embedding generated: ${embedding.length}D`)
     return embedding
   }
 
@@ -118,22 +107,14 @@ export async function generateImageEmbedding(base64: string, mimeType: string): 
 }
 
 /**
- * Generate image caption
- * With hybrid approach, always generates captions using OpenAI GPT-4 Vision
+ * Generate image caption using OpenAI GPT-4 Vision
+ * Always uses OpenAI regardless of embedding provider
  */
 export async function generateImageCaption(
   base64: string,
   mimeType: string
 ): Promise<string | null> {
-  const provider = getEmbeddingProvider()
-
-  if (provider === "huggingface") {
-    // HYBRID approach: Generate caption using OpenAI for both display and embedding
-    console.log("[Embeddings][HYBRID] Generating caption using OpenAI GPT-4 Vision")
-    return await openaiImageCaption(base64, mimeType)
-  }
-
-  console.log("[Embeddings][OPENAI] Generating caption using GPT-4 Vision")
+  console.log("[Embeddings] Generating caption using OpenAI GPT-4 Vision")
   return await openaiImageCaption(base64, mimeType)
 }
 
