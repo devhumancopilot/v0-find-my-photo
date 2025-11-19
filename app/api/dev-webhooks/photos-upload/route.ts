@@ -103,9 +103,28 @@ export async function POST(request: NextRequest) {
         console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Uploaded to: ${fileUrl}`)
         console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Raw embedding: ${embedding.length} dimensions`)
 
-        // Prepare embedding for storage (handle dimension compatibility)
-        const storageEmbedding = prepareEmbeddingForStorage(embedding)
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Storage embedding: ${storageEmbedding.length} dimensions`)
+        // Generate BOTH embeddings for hybrid search
+        let openaiEmbedding: number[]
+        let clipEmbedding: number[] | null = null
+
+        if (embeddingConfig.supportsMultimodal) {
+          // Using CLIP provider - need to generate BOTH embeddings
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] Generating both OpenAI and CLIP embeddings`)
+
+          // Generate OpenAI embedding from the caption
+          const { generateTextEmbedding: openaiTextEmbedding } = await import("@/lib/services/openai")
+          openaiEmbedding = await openaiTextEmbedding(caption || "No caption")
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] ✓ OpenAI embedding: ${openaiEmbedding.length}D`)
+
+          // Generate CLIP direct image embedding
+          const { generateCLIPImageEmbedding } = await import("@/lib/services/huggingface")
+          clipEmbedding = await generateCLIPImageEmbedding(data, type)
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] ✓ CLIP image embedding: ${clipEmbedding.length}D`)
+        } else {
+          // Using OpenAI provider - already have the OpenAI embedding
+          openaiEmbedding = embedding
+          console.log(`[Fallback][OPENAI][${i + 1}/${images.length}] Using OpenAI embedding: ${openaiEmbedding.length}D`)
+        }
 
         // Step 4: Insert into database
         console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Inserting into database`)
@@ -117,15 +136,15 @@ export async function POST(request: NextRequest) {
           type,
           size,
           caption: caption || "No caption available",
-          embedding: storageEmbedding,
+          embedding: openaiEmbedding, // Always 1536D OpenAI embedding
           user_id,
           data: process.env.STORE_BASE64_IN_DB === "true" ? data : undefined,
         }
 
-        // If using CLIP (512D), also save native embedding to embedding_clip
-        if (embeddingConfig.supportsMultimodal && embedding.length === 512) {
-          photoData.embedding_clip = embedding
-          console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Adding CLIP embedding: ${embedding.length}D (native)`)
+        // Add CLIP embedding if available
+        if (clipEmbedding) {
+          photoData.embedding_clip = clipEmbedding // 512D CLIP image embedding
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] Saving both embeddings - OpenAI: ${openaiEmbedding.length}D, CLIP: ${clipEmbedding.length}D`)
         }
 
         const photoId = await insertPhoto(photoData, supabase)

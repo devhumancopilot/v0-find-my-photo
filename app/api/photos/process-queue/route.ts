@@ -177,21 +177,40 @@ async function processQueueInBackground(
         console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] ✓ Embedding generated: ${embedding.length}D`)
       }
 
-      // Prepare embedding for storage
-      const storageEmbedding = prepareEmbeddingForStorage(embedding)
-      console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Storage embedding: ${storageEmbedding.length} dimensions`)
+      // Step 2.5: Generate BOTH embeddings for hybrid search
+      let openaiEmbedding: number[]
+      let clipEmbedding: number[] | null = null
+
+      if (embeddingConfig.supportsMultimodal) {
+        // Using CLIP provider - need to generate BOTH embeddings
+        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] Generating both OpenAI and CLIP embeddings`)
+
+        // We already have the caption, now generate OpenAI embedding from it
+        const { generateTextEmbedding: openaiTextEmbedding } = await import("@/lib/services/openai")
+        openaiEmbedding = await openaiTextEmbedding(caption || "No caption")
+        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] ✓ OpenAI embedding: ${openaiEmbedding.length}D`)
+
+        // The embedding variable contains CLIP's caption-based embedding, but we need direct image embedding
+        const { generateCLIPImageEmbedding } = await import("@/lib/services/huggingface")
+        clipEmbedding = await generateCLIPImageEmbedding(base64Data, photo.type)
+        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] ✓ CLIP image embedding: ${clipEmbedding.length}D`)
+      } else {
+        // Using OpenAI provider - already have the OpenAI embedding
+        openaiEmbedding = embedding
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] Using OpenAI embedding: ${openaiEmbedding.length}D`)
+      }
 
       // Prepare update data
       const updateData: any = {
         caption,
-        embedding: JSON.stringify(storageEmbedding), // pgvector expects string format
+        embedding: JSON.stringify(openaiEmbedding), // Always 1536D OpenAI embedding
         processing_status: 'processing', // Will be set to 'completed' after face detection
       }
 
-      // If using CLIP (512D), also save to embedding_clip column
-      if (embeddingConfig.supportsMultimodal && embedding.length === 512) {
-        updateData.embedding_clip = JSON.stringify(embedding) // Save native 512D
-        console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Saving to embedding_clip: ${embedding.length}D (native CLIP)`)
+      // Add CLIP embedding if available
+      if (clipEmbedding) {
+        updateData.embedding_clip = JSON.stringify(clipEmbedding) // 512D CLIP image embedding
+        console.log(`[Process Queue BG][HYBRID][${processedCount + 1}/${queueItems.length}] Saving both embeddings - OpenAI: ${openaiEmbedding.length}D, CLIP: ${clipEmbedding.length}D`)
       }
 
       // Step 3: Update photo with caption and embedding

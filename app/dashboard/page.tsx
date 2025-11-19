@@ -227,12 +227,14 @@ export default async function DashboardPage() {
                 <h3 className="mb-1 text-xl font-semibold">Upload Photos</h3>
                 <p className="text-white/90">Add photos to your collection for AI-powered organization</p>
               </div>
-              <Link href="/upload-photos">
-                <Button size="lg" className="w-full bg-white text-purple-600 hover:bg-white/90">
-                  <Upload className="mr-2 h-5 w-5" />
-                  Upload Now
-                </Button>
-              </Link>
+              <LoadingLink
+                href="/upload-photos"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-8 text-purple-600 font-medium ring-offset-background transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                loadingMessage="Loading upload page..."
+              >
+                <Upload className="h-5 w-5" />
+                Upload Now
+              </LoadingLink>
             </CardContent>
           </Card>
           <Card className="border-white/20 bg-gradient-to-r from-purple-500 to-pink-600 text-white">
@@ -241,12 +243,14 @@ export default async function DashboardPage() {
                 <h3 className="mb-1 text-xl font-semibold">Create Album</h3>
                 <p className="text-white/90">Let AI help you discover the perfect photos from your collection</p>
               </div>
-              <Link href="/create-album">
-                <Button size="lg" className="w-full bg-white text-pink-600 hover:bg-white/90">
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  Create Album
-                </Button>
-              </Link>
+              <LoadingLink
+                href="/create-album"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-8 text-pink-600 font-medium ring-offset-background transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                loadingMessage="Loading create album page..."
+              >
+                <Sparkles className="h-5 w-5" />
+                Create Album
+              </LoadingLink>
             </CardContent>
           </Card>
         </div>
