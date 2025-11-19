@@ -6,7 +6,7 @@
 import OpenAI from "openai"
 
 // Initialize OpenAI client
-const openai = new OpenAI({
+export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
@@ -67,14 +67,14 @@ export async function generateImageCaption(base64: string, mimeType: string): Pr
       messages: [
         {
           role: "system",
-          content: "You are an image tagging system. Output ONLY comma-separated tags. DO NOT include conversational text, explanations, greetings, or phrases like 'Sure!', 'Here is', 'This image shows', etc. Output ONLY the tags themselves, nothing else.",
+          content: "You analyze images with precision and produce rich, cinematic, sensory captions that highlight composition, lighting, textures, mood, and subtle visual details.",
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Analyze this image and output a comma-separated list of descriptive tags. Include: main subject, objects, people, setting, activity, colors, lighting, time of day, weather, environment, materials, textures, composition, and any visible text or brands. Be specific and factual. Minimum 10 tags. Output format: tag1, tag2, tag3, tag4, tag5...",
+              text: "Analyze the image and generate a cinematic, sensory, detail-focused caption that captures its composition, mood, textures, and atmosphere.",
             },
             {
               type: "image_url",

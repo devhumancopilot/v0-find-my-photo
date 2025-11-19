@@ -12,7 +12,7 @@ import { updateFaceName, deleteFaceProfile } from "@/lib/services/database"
  * PATCH /api/face-profiles/[id]
  * Update face name for a profile
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient()
 
@@ -26,7 +26,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const faceProfileId = parseInt(params.id)
+    const { id } = await params
+    const faceProfileId = parseInt(id)
     if (isNaN(faceProfileId)) {
       return NextResponse.json({ error: "Invalid face profile ID" }, { status: 400 })
     }
@@ -61,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
  * DELETE /api/face-profiles/[id]
  * Delete a face profile
  */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient()
 
@@ -75,7 +76,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const faceProfileId = parseInt(params.id)
+    const { id } = await params
+    const faceProfileId = parseInt(id)
     if (isNaN(faceProfileId)) {
       return NextResponse.json({ error: "Invalid face profile ID" }, { status: 400 })
     }

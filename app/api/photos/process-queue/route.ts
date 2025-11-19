@@ -184,7 +184,7 @@ async function processQueueInBackground(
       // Prepare update data
       const updateData: any = {
         caption,
-        embedding: storageEmbedding,
+        embedding: JSON.stringify(storageEmbedding), // pgvector expects string format
         processing_status: 'processing', // Will be set to 'completed' after face detection
       }
 

@@ -70,8 +70,8 @@ export function AlbumCard({ album }: AlbumCardProps) {
 
   return (
     <>
-      <Card className="group overflow-hidden border-white/20 bg-white/60 backdrop-blur-sm transition-all hover:shadow-lg">
-        <div className="relative aspect-[4/3] overflow-hidden">
+      <Card className="group h-full flex flex-col overflow-hidden border-white/20 bg-white/60 backdrop-blur-sm transition-all hover:shadow-lg">
+        <div className="relative flex-1 overflow-hidden">
           <img
             src={album.cover_image_url || "/placeholder.svg"}
             alt={album.album_title}
@@ -114,8 +114,8 @@ export function AlbumCard({ album }: AlbumCardProps) {
           </div>
         </div>
 
-        <CardHeader>
-          <CardTitle className="text-lg">{album.album_title}</CardTitle>
+        <CardHeader className="flex-shrink-0">
+          <CardTitle className="text-lg truncate">{album.album_title}</CardTitle>
           <CardDescription className="flex items-center gap-4 text-sm">
             <span className="flex items-center gap-1">
               <ImageIcon className="h-4 w-4" />

@@ -18,7 +18,9 @@ import {
   prepareEmbeddingForStorage,
   getEmbeddingConfig
 } from "@/lib/services/embeddings"
+import { generateCLIPTextEmbedding } from "@/lib/services/huggingface"
 import { matchPhotos } from "@/lib/services/database"
+import { enhanceSearchResults, type PhotoWithMetadata } from "@/lib/services/search-enhancement"
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,92 +82,158 @@ export async function POST(request: NextRequest) {
       console.error(`[Fallback] Diagnostic check failed:`, diagError)
     }
 
-    let embedding: number[]
-
     try {
+      // Use service role client for server-to-server calls (this endpoint is internally authenticated)
+      const { createServiceRoleClient } = await import("@/lib/supabase/server")
+      const serviceSupabase = createServiceRoleClient()
+      const matchCount = 50 // Increased to get more results including low similarity
+
+      let allPhotos: any[]
+
       if (query) {
-        // Text-based search
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][TEXT-SEARCH] Generating text embedding`)
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][TEXT-SEARCH] Query: "${query}"`)
-        embedding = await generateTextEmbedding(query)
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][TEXT-SEARCH] ✓ Embedding generated: ${embedding.length}D`)
+        // ==========================================
+        // CLIP TEXT SEARCH (visual concept matching only)
+        // ==========================================
+        console.log(`[Fallback][CLIP][TEXT-SEARCH] Generating CLIP text embedding for query: "${query}"`)
+
+        // Generate CLIP 512D text embedding (for visual concept matching)
+        console.log(`[Fallback][CLIP][TEXT-SEARCH] Generating CLIP text embedding...`)
+        const embeddingClip = await generateCLIPTextEmbedding(query)
+        console.log(`[Fallback][CLIP][TEXT-SEARCH] ✓ Generated: ${embeddingClip.length}D`)
+
+        // Prepare embedding for database query
+        const searchEmbedding = prepareEmbeddingForStorage(embeddingClip)
+        console.log(`[Fallback][CLIP][TEXT-SEARCH] Search embedding prepared: ${searchEmbedding.length} dimensions`)
+
+        console.log(`[Fallback][CLIP][TEXT-SEARCH] Performing vector similarity search`)
+        console.log(`[Fallback][CLIP][TEXT-SEARCH] User ID: ${requestUser.id}`)
+
+        allPhotos = await matchPhotos(searchEmbedding, requestUser.id, matchCount, serviceSupabase)
       } else if (image) {
-        // Image-based search
+        // ==========================================
+        // IMAGE-BASED SEARCH (single embedding)
+        // ==========================================
         console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][IMAGE-SEARCH] Generating image embedding`)
+
         // Extract MIME type from base64 data URL if present
         const mimeMatch = image.match(/^data:([^;]+);base64,/)
         const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg"
         const base64Data = image.replace(/^data:[^;]+;base64,/, "")
         console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][IMAGE-SEARCH] Image type: ${mimeType}`)
 
-        embedding = await generateImageEmbedding(base64Data, mimeType)
+        const embedding = await generateImageEmbedding(base64Data, mimeType)
         console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][IMAGE-SEARCH] ✓ Embedding generated: ${embedding.length}D`)
+
+        // Prepare embedding for database query (handle dimension compatibility)
+        const searchEmbedding = prepareEmbeddingForStorage(embedding)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Search embedding prepared: ${searchEmbedding.length} dimensions`)
+
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Performing vector similarity search`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] User ID: ${requestUser.id}`)
+
+        allPhotos = await matchPhotos(searchEmbedding, requestUser.id, matchCount, serviceSupabase)
       } else {
         return NextResponse.json({ error: "No query or image provided" }, { status: 400 })
       }
 
-      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Raw embedding: ${embedding.length} dimensions`)
-
-      // Prepare embedding for database query (handle dimension compatibility)
-      const searchEmbedding = prepareEmbeddingForStorage(embedding)
-      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Search embedding prepared: ${searchEmbedding.length} dimensions`)
-
-      // Use the prepared embedding for search
-      embedding = searchEmbedding
-
-      // Perform vector similarity search
-      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Performing vector similarity search`)
-      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] User ID: ${requestUser.id}`)
-      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Embedding dimensions: ${embedding.length}`)
-
-      const matchCount = 50 // Increased to get more results including low similarity
-      const allPhotos = await matchPhotos(embedding, requestUser.id, matchCount)
-
-      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Found ${allPhotos.length} photos (before filtering)`)
+      const searchType = query ? 'CLIP' : embeddingConfig.provider.toUpperCase()
+      console.log(`[Fallback][${searchType}] Found ${allPhotos.length} photos (before filtering)`)
 
       // Filter to only include photos above minimum similarity threshold
-      const MIN_SIMILARITY = parseFloat(process.env.PHOTO_SEARCH_MIN_SIMILARITY || "0.4")
-      const photos = allPhotos.filter(p => p.similarity >= MIN_SIMILARITY)
+      const MIN_SIMILARITY = parseFloat(process.env.PHOTO_SEARCH_MIN_SIMILARITY || "0.35")
+      const filteredPhotos = allPhotos.filter(p => p.similarity >= MIN_SIMILARITY)
 
-      console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] After filtering (>= ${(MIN_SIMILARITY * 100).toFixed(0)}% similarity): ${photos.length} photos`)
+      console.log(`[Fallback][${searchType}] After filtering (>= ${(MIN_SIMILARITY * 100).toFixed(0)}% similarity): ${filteredPhotos.length} photos`)
+
+      // ENHANCED ALGORITHM: Apply multi-signal ranking and re-ranking
+      let photos: any[] = filteredPhotos
+
+      if (query && filteredPhotos.length > 0) {
+        console.log(`[Fallback][ENHANCED] 🚀 Applying enhanced search algorithm...`)
+
+        // Convert to PhotoWithMetadata format
+        const photosWithMetadata: PhotoWithMetadata[] = filteredPhotos.map(p => ({
+          id: p.id,
+          name: p.name,
+          file_url: p.file_url,
+          caption: p.caption,
+          similarity: p.similarity,
+          created_at: p.created_at,
+          is_favorite: p.is_favorite,
+          data: p.data,
+        }))
+
+        // Apply enhanced search
+        const enhancedPhotos = await enhanceSearchResults(query, photosWithMetadata)
+
+        console.log(`[Fallback][ENHANCED] ✓ Enhanced ranking complete`)
+        console.log(`[Fallback][ENHANCED] Top result improved from ${(filteredPhotos[0]?.similarity * 100).toFixed(1)}% to ${(enhancedPhotos[0]?.finalScore * 100).toFixed(1)}%`)
+
+        photos = enhancedPhotos
+      } else {
+        console.log(`[Fallback][ENHANCED] ⏭️  Skipping enhancement (image search or no results)`)
+      }
 
       // Log ALL matches with their similarity scores
       if (allPhotos.length > 0) {
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ========== SEARCH RESULTS ==========`)
-        allPhotos.forEach((photo, index) => {
-          const similarityPercent = (photo.similarity * 100).toFixed(2)
-          const relevance = photo.similarity >= 0.7 ? '🟢 HIGH' :
-                           photo.similarity >= 0.5 ? '🟡 MEDIUM' :
-                           photo.similarity >= 0.3 ? '🟠 LOW' :
+        console.log(`[Fallback][${searchType}] ========== SEARCH RESULTS ==========`)
+        photos.slice(0, 10).forEach((photo: any, index: number) => {
+          const score = photo.finalScore || photo.similarity
+          const similarityPercent = (score * 100).toFixed(2)
+          const relevance = score >= 0.7 ? '🟢 HIGH' :
+                           score >= 0.5 ? '🟡 MEDIUM' :
+                           score >= 0.35 ? '🟠 LOW' :
                            '🔴 VERY LOW'
-          console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ${index + 1}. ${relevance} ${similarityPercent}% - ${photo.name} (ID: ${photo.id})`)
+          console.log(`[Fallback][${searchType}] ${index + 1}. ${relevance} ${similarityPercent}% - ${photo.name} (ID: ${photo.id})`)
         })
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ===================================`)
+        if (photos.length > 10) {
+          console.log(`[Fallback][${searchType}] ... and ${photos.length - 10} more`)
+        }
+        console.log(`[Fallback][${searchType}] ===================================`)
 
-        // Summary by relevance level (from all photos)
-        const high = allPhotos.filter(p => p.similarity >= 0.7).length
-        const medium = allPhotos.filter(p => p.similarity >= 0.6 && p.similarity < 0.7).length
-        const low = allPhotos.filter(p => p.similarity >= 0.3 && p.similarity < 0.6).length
-        const veryLow = allPhotos.filter(p => p.similarity < 0.3).length
+        // Summary by relevance level
+        const high = photos.filter((p: any) => (p.finalScore || p.similarity) >= 0.7).length
+        const medium = photos.filter((p: any) => {
+          const score = p.finalScore || p.similarity
+          return score >= 0.5 && score < 0.7
+        }).length
+        const low = photos.filter((p: any) => {
+          const score = p.finalScore || p.similarity
+          return score >= 0.35 && score < 0.5
+        }).length
 
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Summary: ${high} high (≥70%), ${medium} medium (60-69%), ${low} low (30-59%), ${veryLow} very low (<30%)`)
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] Returning ${photos.length} photos (≥${(MIN_SIMILARITY * 100).toFixed(0)}% similarity)`)
+        console.log(`[Fallback][${searchType}] Summary: ${high} high (≥70%), ${medium} medium (50-69%), ${low} low (35-49%)`)
+        console.log(`[Fallback][${searchType}] Returning ${photos.length} photos`)
       } else {
-        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}] ⚠️ NO MATCHES FOUND`)
+        console.log(`[Fallback][${searchType}] ⚠️ NO MATCHES FOUND`)
       }
 
       console.log(`[Fallback][SEARCH-END] ========================================`)
       console.log(`[Fallback][SEARCH-END] Search Complete`)
-      console.log(`[Fallback][SEARCH-END] Provider: ${embeddingConfig.provider.toUpperCase()}`)
+      console.log(`[Fallback][SEARCH-END] Method: ${query ? 'HYBRID (Text + CLIP)' : embeddingConfig.provider.toUpperCase()}`)
       console.log(`[Fallback][SEARCH-END] Results: ${photos.length} photos returned`)
       console.log(`[Fallback][SEARCH-END] ========================================`)
 
+      // Format photos for response - use finalScore if available, otherwise similarity
+      const formattedPhotos = photos.map((photo: any) => ({
+        id: photo.id,
+        name: photo.name,
+        file_url: photo.file_url,
+        caption: photo.caption,
+        similarity: photo.finalScore || photo.similarity, // Use enhanced score
+        created_at: photo.created_at,
+        is_favorite: photo.is_favorite,
+        // Include score breakdown for debugging (optional)
+        ...(photo.scoreBreakdown && { scoreBreakdown: photo.scoreBreakdown }),
+      }))
+
       return NextResponse.json({
         success: true,
-        photos,
-        count: photos.length,
+        photos: formattedPhotos,
+        count: formattedPhotos.length,
         searchType: query ? "text" : "image",
         albumTitle: albumTitle || null,
+        enhanced: query && filteredPhotos.length > 0, // Flag indicating enhanced algorithm was used
       })
     } catch (searchError) {
       console.error("[Fallback] Search error:", searchError)

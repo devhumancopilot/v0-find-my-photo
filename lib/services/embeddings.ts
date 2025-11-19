@@ -91,9 +91,25 @@ export async function generateImageEmbedding(base64: string, mimeType: string): 
   console.log(`[Embeddings][${provider.toUpperCase()}] Image type: ${mimeType}`)
 
   if (provider === "huggingface") {
-    // CLIP directly embeds the image - no caption needed!
-    console.log(`[Embeddings][CLIP] Using CLIP multimodal image encoder (native image embedding)`)
-    return await generateCLIPImageEmbedding(base64, mimeType)
+    // HYBRID approach: OpenAI caption + CLIP text embedding
+    console.log(`[Embeddings][HYBRID] Using hybrid approach: OpenAI caption → CLIP text embedding`)
+
+    // Step 1: Generate caption using OpenAI GPT-4 Vision
+    console.log(`[Embeddings][HYBRID] Step 1: Generating caption with OpenAI GPT-4 Vision`)
+    const caption = await openaiImageCaption(base64, mimeType)
+
+    if (!caption) {
+      throw new Error("Failed to generate caption for hybrid embedding")
+    }
+
+    console.log(`[Embeddings][HYBRID] Caption generated: "${caption.substring(0, 100)}..."`)
+
+    // Step 2: Embed the caption using CLIP text encoder
+    console.log(`[Embeddings][HYBRID] Step 2: Embedding caption with CLIP text encoder`)
+    const embedding = await generateCLIPTextEmbedding(caption)
+
+    console.log(`[Embeddings][HYBRID] ✅ Caption embedding generated: ${embedding.length}D`)
+    return embedding
   }
 
   // OpenAI approach: caption -> embedding
@@ -102,8 +118,8 @@ export async function generateImageEmbedding(base64: string, mimeType: string): 
 }
 
 /**
- * Generate image caption (OpenAI only, for display purposes)
- * Returns null if using CLIP (no caption needed)
+ * Generate image caption
+ * With hybrid approach, always generates captions using OpenAI GPT-4 Vision
  */
 export async function generateImageCaption(
   base64: string,
@@ -112,11 +128,9 @@ export async function generateImageCaption(
   const provider = getEmbeddingProvider()
 
   if (provider === "huggingface") {
-    // CLIP doesn't need captions for embeddings
-    // But we might still want captions for display
-    // Return null for now, can be enhanced later
-    console.log("[Embeddings][CLIP] Skipping caption generation (CLIP uses direct image embeddings)")
-    return null
+    // HYBRID approach: Generate caption using OpenAI for both display and embedding
+    console.log("[Embeddings][HYBRID] Generating caption using OpenAI GPT-4 Vision")
+    return await openaiImageCaption(base64, mimeType)
   }
 
   console.log("[Embeddings][OPENAI] Generating caption using GPT-4 Vision")
