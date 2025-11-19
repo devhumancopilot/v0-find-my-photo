@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { FavoriteButton } from "@/components/favorite-button"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
+import { LoadingLink } from "@/components/loading-link"
 import { ImageIcon, Clock, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -106,11 +106,15 @@ export function AlbumCard({ album }: AlbumCardProps) {
 
           {/* View Album Button */}
           <div className="absolute bottom-4 left-4 right-4 translate-y-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-            <Link href={`/albums/${album.id}`}>
+            <LoadingLink
+              href={`/albums/${album.id}`}
+              className="inline-block w-full"
+              loadingMessage="Loading album..."
+            >
               <Button size="sm" className="w-full bg-white text-foreground hover:bg-white/90">
                 View Album
               </Button>
-            </Link>
+            </LoadingLink>
           </div>
         </div>
 

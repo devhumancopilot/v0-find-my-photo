@@ -67,14 +67,14 @@ export async function generateImageCaption(base64: string, mimeType: string): Pr
       messages: [
         {
           role: "system",
-          content: "You analyze images with precision and produce rich, cinematic, sensory captions that highlight composition, lighting, textures, mood, and subtle visual details.",
+          content: "You generate short, clear, one-sentence captions that describe what you see in images.",
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Analyze the image and generate a cinematic, sensory, detail-focused caption that captures its composition, mood, textures, and atmosphere.",
+              text: "Describe this image in one short sentence that captures everything important about what you see.",
             },
             {
               type: "image_url",

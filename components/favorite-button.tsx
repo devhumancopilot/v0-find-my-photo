@@ -93,12 +93,18 @@ export function FavoriteButton({
       onClick={handleToggleFavorite}
       disabled={isLoading}
       className={`
-        ${isFavorite ? "text-red-500 hover:text-red-600" : "text-white hover:text-white"}
-        ${size === "icon" ? "bg-black/40 hover:bg-black/60 backdrop-blur-sm" : ""}
+        group transition-all duration-300
+        ${isFavorite
+          ? "bg-gradient-to-r from-red-500 to-pink-500 text-white border-0 shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/50 hover:scale-105"
+          : size === "icon"
+            ? "text-white hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm"
+            : "border-2 border-gray-300 hover:border-purple-400 hover:shadow-md hover:scale-105"
+        }
+        ${size === "icon" ? "" : "font-semibold"}
       `}
     >
       <Heart
-        className={size === "icon" ? "h-4 w-4" : "mr-2 h-4 w-4"}
+        className={`${size === "icon" ? "h-4 w-4" : "mr-2 h-4 w-4"} transition-transform duration-300 group-hover:scale-110`}
         fill={isFavorite ? "currentColor" : "none"}
       />
       {showLabel && (size !== "icon") && (isFavorite ? "Favorited" : "Favorite")}

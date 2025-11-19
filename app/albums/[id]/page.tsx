@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { FavoriteButton } from "@/components/favorite-button"
@@ -11,10 +12,6 @@ import {
   ArrowLeft,
   ImageIcon,
   Calendar,
-  Download,
-  Share2,
-  Edit,
-  Heart,
   Printer
 } from "lucide-react"
 
@@ -131,33 +128,33 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                 </Badge>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <FavoriteButton
                 itemId={album.id}
                 itemType="album"
-                initialIsFavorite={album.is_favorite || false}
+                initialIsFavorite={!!album.is_favorite}
                 variant="outline"
-                size="sm"
+                size="default"
                 showLabel={true}
               />
-              <Button variant="outline" size="sm">
-                <Share2 className="mr-2 h-4 w-4" />
-                Share
-              </Button>
-              <Button variant="outline" size="sm">
-                <Download className="mr-2 h-4 w-4" />
-                Download
-              </Button>
               <Link href={`/albums/${id}/print`}>
-                <Button variant="outline" size="sm">
-                  <Printer className="mr-2 h-4 w-4" />
-                  Preview for Print
+                <Button
+                  size="default"
+                  className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/50 hover:scale-105 border-0 animate-gradient-xy"
+                >
+                  {/* Shimmer effect */}
+                  <span className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+
+                  {/* Hover gradient overlay */}
+                  <span className="absolute inset-0 bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+                  {/* Pulse animation */}
+                  <span className="absolute -inset-1 animate-pulse-slow rounded-lg bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 opacity-30 blur-md" />
+
+                  <Printer className="relative mr-2 h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
+                  <span className="relative font-semibold">Album Print Preview</span>
                 </Button>
               </Link>
-              <Button variant="outline" size="sm">
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
               <AlbumActions
                 albumId={album.id}
                 albumTitle={album.album_title}
