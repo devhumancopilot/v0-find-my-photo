@@ -61,7 +61,47 @@ export async function POST(request: Request) {
     // webhookResult.data contains { success, photos, count, searchType }
     const photos = webhookResult.data?.photos || []
 
-    console.log(`[v0] Returning ${photos.length} photos to frontend`)
+    console.log(`[v0] Received ${photos.length} photos from webhook`)
+
+    // SECURITY CHECK: Verify all returned photos belong to the authenticated user
+    // This is a defense-in-depth measure to catch any bugs in the webhook or database function
+    const photoIds = photos.map((p: any) => p.id).filter(Boolean)
+
+    if (photoIds.length > 0) {
+      const { data: verifiedPhotos, error: verifyError } = await supabase
+        .from("photos")
+        .select("id")
+        .in("id", photoIds)
+        .eq("user_id", user.id)
+
+      if (verifyError) {
+        console.error("[v0] Error verifying photo ownership:", verifyError)
+        return NextResponse.json(
+          { error: "Failed to verify photo ownership" },
+          { status: 500 }
+        )
+      }
+
+      const verifiedPhotoIds = new Set(verifiedPhotos?.map(p => p.id) || [])
+      const filteredPhotos = photos.filter((p: any) => verifiedPhotoIds.has(p.id))
+
+      const removedCount = photos.length - filteredPhotos.length
+      if (removedCount > 0) {
+        console.warn(`[v0] ⚠️ SECURITY: Removed ${removedCount} photos that don't belong to user ${user.id}`)
+      }
+
+      console.log(`[v0] Returning ${filteredPhotos.length} verified photos to frontend`)
+
+      return NextResponse.json({
+        success: true,
+        webhookTriggered: true,
+        searchType: query ? "text" : "image",
+        photos: filteredPhotos,
+        count: filteredPhotos.length,
+      })
+    }
+
+    console.log(`[v0] Returning ${photos.length} photos to frontend (no photos to verify)`)
 
     return NextResponse.json({
       success: true,

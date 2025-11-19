@@ -12,6 +12,7 @@ export interface PhotoInsertData {
   size: number
   caption: string
   embedding: number[]
+  embedding_clip?: number[] // Optional: 512D CLIP embeddings
   user_id: string
   data?: string // Optional base64 data
   album_id?: number | null
@@ -23,6 +24,11 @@ export interface MatchedPhoto {
   file_url: string
   caption: string
   similarity: number
+}
+
+export interface MatchedPhotoHybrid extends MatchedPhoto {
+  similarity_text: number
+  similarity_clip: number
 }
 
 export interface AlbumData {
@@ -95,6 +101,12 @@ export async function insertPhoto(photoData: PhotoInsertData, supabaseClient?: a
       album_id: photoData.album_id || null,
     }
 
+    // Add CLIP embeddings if provided (512D)
+    if (photoData.embedding_clip) {
+      insertData.embedding_clip = JSON.stringify(photoData.embedding_clip)
+      console.log(`[Database] Saving CLIP embedding: ${photoData.embedding_clip.length}D`)
+    }
+
     // Only include base64 data if configured
     if (storeBase64 && photoData.data) {
       insertData.data = photoData.data
@@ -124,27 +136,33 @@ export async function insertPhoto(photoData: PhotoInsertData, supabaseClient?: a
 export async function matchPhotos(
   embedding: number[],
   userId: string,
-  matchCount: number = 20
+  matchCount: number = 20,
+  supabaseClient?: any
 ): Promise<MatchedPhoto[]> {
   try {
-    const supabase = await createClient()
+    // Use provided client or create default one
+    const supabase = supabaseClient || await createClient()
 
-    // Check current auth state
+    // Check current auth state (for logging purposes)
     const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const isServiceRole = !currentUser && supabaseClient
+
     console.log(`[Database] Current authenticated user: ${currentUser?.id || 'NONE'}`)
     console.log(`[Database] Searching for user_id: ${userId}`)
     console.log(`[Database] User IDs match: ${currentUser?.id === userId}`)
+    console.log(`[Database] Using service role: ${isServiceRole}`)
 
+    // Call match_photos RPC (now accessible by service_role too)
     console.log(`[Database] Calling match_photos RPC:`, {
       embedding_length: embedding.length,
-      user_id: userId,
+      filter: { user_id: userId },
       match_count: matchCount,
     })
 
     const { data, error } = await supabase.rpc("match_photos", {
-      query_embedding: JSON.stringify(embedding),
+      query_embedding: embedding,
       match_count: matchCount,
-      filter: JSON.stringify({ user_id: userId }),
+      filter: { user_id: userId },
     })
 
     if (error) {
@@ -173,6 +191,87 @@ export async function matchPhotos(
   } catch (error) {
     console.error("Error matching photos:", error)
     throw new Error(`Failed to match photos: ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
+}
+
+/**
+ * Search photos using hybrid vector similarity (BOTH text and image embeddings)
+ * Combines OpenAI 1536D (caption) and CLIP 512D (image) for better accuracy
+ *
+ * @param embeddingText - 1536D OpenAI text embedding
+ * @param embeddingClip - 512D CLIP embedding
+ * @param userId - User ID to filter by
+ * @param matchCount - Number of results to return
+ * @param weightText - Weight for text similarity (default 0.5)
+ * @param weightClip - Weight for CLIP similarity (default 0.5)
+ * @returns Array of matched photos with combined and individual similarity scores
+ */
+export async function matchPhotosHybrid(
+  embeddingText: number[],
+  embeddingClip: number[],
+  userId: string,
+  matchCount: number = 20,
+  weightText: number = 0.5,
+  weightClip: number = 0.5,
+  supabaseClient?: any
+): Promise<MatchedPhotoHybrid[]> {
+  try {
+    const supabase = supabaseClient || await createClient()
+
+    // Check current auth state (for logging purposes)
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const isServiceRole = !currentUser && supabaseClient
+
+    console.log(`[Database][HYBRID] Current authenticated user: ${currentUser?.id || 'NONE'}`)
+    console.log(`[Database][HYBRID] Searching for user_id: ${userId}`)
+    console.log(`[Database][HYBRID] User IDs match: ${currentUser?.id === userId}`)
+    console.log(`[Database][HYBRID] Using service role: ${isServiceRole}`)
+
+    console.log(`[Database][HYBRID] Calling match_photos_hybrid RPC:`, {
+      embedding_text_length: embeddingText.length,
+      embedding_clip_length: embeddingClip.length,
+      filter: { user_id: userId },
+      match_count: matchCount,
+      weights: { text: weightText, clip: weightClip }
+    })
+
+    const { data, error } = await supabase.rpc("match_photos_hybrid", {
+      query_embedding_text: embeddingText,
+      query_embedding_clip: embeddingClip,
+      match_count: matchCount,
+      filter: { user_id: userId },
+      weight_text: weightText,
+      weight_clip: weightClip,
+    })
+
+    if (error) {
+      console.error(`[Database][HYBRID] match_photos_hybrid RPC error:`, error)
+      console.error(`[Database][HYBRID] Full error details:`, JSON.stringify(error, null, 2))
+      throw new Error(`Hybrid vector search failed: ${error.message}`)
+    }
+
+    console.log(`[Database][HYBRID] match_photos_hybrid returned ${data?.length || 0} results`)
+
+    // Log detailed results
+    if (data && data.length > 0) {
+      console.log(`[Database][HYBRID] Results breakdown:`)
+      const asMatchedPhotos = data as MatchedPhotoHybrid[]
+      asMatchedPhotos.slice(0, 5).forEach((photo, idx) => {
+        console.log(`[Database][HYBRID]   ${idx + 1}. ${photo.name}`)
+        console.log(`[Database][HYBRID]      Combined: ${(photo.similarity * 100).toFixed(2)}%`)
+        console.log(`[Database][HYBRID]      Text: ${(photo.similarity_text * 100).toFixed(2)}%, CLIP: ${(photo.similarity_clip * 100).toFixed(2)}%`)
+      })
+      if (data.length > 5) {
+        console.log(`[Database][HYBRID]   ... and ${data.length - 5} more results`)
+      }
+    } else {
+      console.log(`[Database][HYBRID] ⚠️ No results returned from match_photos_hybrid`)
+    }
+
+    return (data || []) as MatchedPhotoHybrid[]
+  } catch (error) {
+    console.error("Error in hybrid photo matching:", error)
+    throw new Error(`Failed to match photos (hybrid): ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
 

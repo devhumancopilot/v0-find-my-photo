@@ -13,7 +13,12 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
-import { generateImageCaption, generateTextEmbedding } from "@/lib/services/openai"
+import {
+  generateImageCaption,
+  generateImageEmbedding,
+  prepareEmbeddingForStorage,
+  getEmbeddingConfig
+} from "@/lib/services/embeddings"
 import { uploadPhotoToStorage } from "@/lib/services/storage"
 import { insertPhoto, insertFaceProfile, matchFaces } from "@/lib/services/database"
 import { detectFaces } from "@/lib/services/face-detection"
@@ -32,7 +37,13 @@ export async function POST(request: NextRequest) {
     // This is safe because this endpoint is only called by the authenticated /api/webhooks/photos-upload
     const supabase = createServiceRoleClient()
 
-    console.log(`[Fallback] Processing ${images.length} images for user ${user_id}`)
+    const embeddingConfig = getEmbeddingConfig()
+    console.log(`[Fallback][BATCH-START] ========================================`)
+    console.log(`[Fallback][BATCH-START] Processing ${images.length} images for user ${user_id}`)
+    console.log(`[Fallback][BATCH-START] Embedding Provider: ${embeddingConfig.provider.toUpperCase()}`)
+    console.log(`[Fallback][BATCH-START] Dimensions: ${embeddingConfig.dimensions}D`)
+    console.log(`[Fallback][BATCH-START] Multimodal Support: ${embeddingConfig.supportsMultimodal ? 'YES (CLIP)' : 'NO (Caption-based)'}`)
+    console.log(`[Fallback][BATCH-START] ========================================`)
 
     const processedPhotoIds: number[] = []
     const errors: string[] = []
@@ -43,39 +54,102 @@ export async function POST(request: NextRequest) {
       const { name, data, type, size } = images[i]
 
       try {
-        console.log(`[Fallback] Processing image ${i + 1}/${images.length}: ${name}`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Processing: ${name}`)
 
-        // Step 1: Generate caption
-        console.log(`[Fallback] Generating caption for ${name}`)
-        const caption = await generateImageCaption(data, type)
-        console.log(`[Fallback] Caption generated: ${caption.substring(0, 100)}...`)
+        // Step 1: Generate caption (if needed) and embedding
+        // For CLIP: directly embed image (no caption needed for search)
+        // For OpenAI: generate caption first, then embed caption
+        let caption: string | null
+        let embedding: number[]
 
-        // Step 2 & 3: Upload to storage and generate embedding IN PARALLEL (2x speedup)
-        console.log(`[Fallback] Uploading ${name} and generating embedding in parallel`)
-        const [fileUrl, embedding] = await Promise.all([
-          uploadPhotoToStorage(data, user_id, name, type),
-          generateTextEmbedding(caption),
-        ])
-        console.log(`[Fallback] Uploaded to: ${fileUrl}`)
-        console.log(`[Fallback] Embedding generated (${embedding.length} dimensions)`)
+        if (embeddingConfig.supportsMultimodal) {
+          // CLIP approach: direct image embedding
+          console.log(`[Fallback][CLIP][${i + 1}/${images.length}] 🎨 Using CLIP multimodal approach for ${name}`)
+          console.log(`[Fallback][CLIP][${i + 1}/${images.length}] -> Direct image encoding (no caption needed)`)
+          const [uploadUrl, imageEmbedding] = await Promise.all([
+            uploadPhotoToStorage(data, user_id, name, type),
+            generateImageEmbedding(data, type),
+          ])
+
+          embedding = imageEmbedding
+          // Caption is optional for CLIP but nice to have for display
+          caption = await generateImageCaption(data, type)
+          console.log(`[Fallback][CLIP][${i + 1}/${images.length}] ✓ Embedding generated: ${embedding.length}D`)
+          if (caption) {
+            console.log(`[Fallback][CLIP][${i + 1}/${images.length}] Caption (optional): ${caption.substring(0, 100)}...`)
+          }
+
+          // Use the upload URL from parallel operation
+          var fileUrl = uploadUrl
+        } else {
+          // OpenAI approach: caption-based
+          console.log(`[Fallback][OPENAI][${i + 1}/${images.length}] 📝 Using OpenAI caption-based approach for ${name}`)
+          console.log(`[Fallback][OPENAI][${i + 1}/${images.length}] -> Step 1: Generating caption with GPT-4 Vision`)
+          caption = await generateImageCaption(data, type)
+          console.log(`[Fallback][OPENAI][${i + 1}/${images.length}] ✓ Caption: ${caption?.substring(0, 100)}...`)
+
+          // Upload to storage and generate embedding IN PARALLEL (2x speedup)
+          console.log(`[Fallback][OPENAI][${i + 1}/${images.length}] -> Step 2: Uploading & embedding in parallel`)
+          const [uploadUrl, textEmbedding] = await Promise.all([
+            uploadPhotoToStorage(data, user_id, name, type),
+            generateImageEmbedding(data, type), // This uses caption internally
+          ])
+
+          embedding = textEmbedding
+          var fileUrl = uploadUrl
+          console.log(`[Fallback][OPENAI][${i + 1}/${images.length}] ✓ Embedding generated: ${embedding.length}D`)
+        }
+
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Uploaded to: ${fileUrl}`)
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Raw embedding: ${embedding.length} dimensions`)
+
+        // Generate BOTH embeddings for hybrid search
+        let openaiEmbedding: number[]
+        let clipEmbedding: number[] | null = null
+
+        if (embeddingConfig.supportsMultimodal) {
+          // Using CLIP provider - need to generate BOTH embeddings
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] Generating both OpenAI and CLIP embeddings`)
+
+          // Generate OpenAI embedding from the caption
+          const { generateTextEmbedding: openaiTextEmbedding } = await import("@/lib/services/openai")
+          openaiEmbedding = await openaiTextEmbedding(caption || "No caption")
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] ✓ OpenAI embedding: ${openaiEmbedding.length}D`)
+
+          // Generate CLIP direct image embedding
+          const { generateCLIPImageEmbedding } = await import("@/lib/services/huggingface")
+          clipEmbedding = await generateCLIPImageEmbedding(data, type)
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] ✓ CLIP image embedding: ${clipEmbedding.length}D`)
+        } else {
+          // Using OpenAI provider - already have the OpenAI embedding
+          openaiEmbedding = embedding
+          console.log(`[Fallback][OPENAI][${i + 1}/${images.length}] Using OpenAI embedding: ${openaiEmbedding.length}D`)
+        }
 
         // Step 4: Insert into database
-        console.log(`[Fallback] Inserting ${name} into database`)
-        const photoId = await insertPhoto(
-          {
-            name,
-            file_url: fileUrl,
-            type,
-            size,
-            caption,
-            embedding,
-            user_id,
-            data: process.env.STORE_BASE64_IN_DB === "true" ? data : undefined,
-          },
-          supabase
-        )
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] Inserting into database`)
 
-        console.log(`[Fallback] Successfully processed ${name} (ID: ${photoId})`)
+        // Prepare photo data
+        const photoData: any = {
+          name,
+          file_url: fileUrl,
+          type,
+          size,
+          caption: caption || "No caption available",
+          embedding: openaiEmbedding, // Always 1536D OpenAI embedding
+          user_id,
+          data: process.env.STORE_BASE64_IN_DB === "true" ? data : undefined,
+        }
+
+        // Add CLIP embedding if available
+        if (clipEmbedding) {
+          photoData.embedding_clip = clipEmbedding // 512D CLIP image embedding
+          console.log(`[Fallback][HYBRID][${i + 1}/${images.length}] Saving both embeddings - OpenAI: ${openaiEmbedding.length}D, CLIP: ${clipEmbedding.length}D`)
+        }
+
+        const photoId = await insertPhoto(photoData, supabase)
+
+        console.log(`[Fallback][${embeddingConfig.provider.toUpperCase()}][${i + 1}/${images.length}] ✅ SUCCESS - Photo ID: ${photoId}`)
         processedPhotoIds.push(photoId)
 
         // Step 5: Face Detection (if enabled)
@@ -178,7 +252,12 @@ export async function POST(request: NextRequest) {
     const failedCount = errors.length
     const duplicateCount = duplicates.length
 
-    console.log(`[Fallback] Completed: ${successCount} successful, ${duplicateCount} duplicates skipped, ${failedCount} failed`)
+    console.log(`[Fallback][BATCH-END] ========================================`)
+    console.log(`[Fallback][BATCH-END] Batch Processing Complete`)
+    console.log(`[Fallback][BATCH-END] Provider Used: ${embeddingConfig.provider.toUpperCase()}`)
+    console.log(`[Fallback][BATCH-END] Results: ${successCount} successful, ${duplicateCount} duplicates, ${failedCount} failed`)
+    console.log(`[Fallback][BATCH-END] Total Processed: ${successCount + duplicateCount + failedCount} out of ${images.length}`)
+    console.log(`[Fallback][BATCH-END] ========================================`)
 
     return NextResponse.json({
       success: true,

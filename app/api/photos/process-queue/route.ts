@@ -3,8 +3,15 @@
  *
  * This endpoint processes photos from the queue in the background:
  * 1. Fetches pending photos from the queue
- * 2. Generates AI captions
- * 3. Creates embeddings for semantic search
+ * 2. Generates AI captions using OpenAI GPT-4 Vision
+ * 3. Creates embeddings for semantic search:
+ *    PURE CLIP MODE (when EMBEDDING_PROVIDER=huggingface):
+ *    - CLIP text embedding (512D) from caption → embedding field
+ *    - CLIP image embedding (512D) from image → embedding_clip field
+ *    Both in same 512D space for perfect multimodal matching!
+ *
+ *    OPENAI MODE (when EMBEDDING_PROVIDER=openai):
+ *    - OpenAI text embedding (1536D) from caption → embedding field
  * 4. Performs face detection (if enabled)
  * 5. Updates queue and photo status
  *
@@ -14,7 +21,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
-import { generateImageCaption, generateTextEmbedding } from "@/lib/services/openai"
+import {
+  generateImageCaption,
+  generateImageEmbedding,
+  prepareEmbeddingForStorage,
+  getEmbeddingConfig
+} from "@/lib/services/embeddings"
 import { detectFaces } from "@/lib/services/face-detection"
 import { insertFaceProfile, matchFaces } from "@/lib/services/database"
 
@@ -98,7 +110,14 @@ async function processQueueInBackground(
   queueItems: Array<{ id: number; photo_id: number; retry_count: number }>,
   supabase: any
 ) {
-  console.log(`[Process Queue BG] Starting background processing of ${queueItems.length} photos`)
+  const embeddingConfig = getEmbeddingConfig()
+  console.log(`[Process Queue BG][BATCH-START] ========================================`)
+  console.log(`[Process Queue BG][BATCH-START] Starting background processing of ${queueItems.length} photos`)
+  console.log(`[Process Queue BG][BATCH-START] User ID: ${userId}`)
+  console.log(`[Process Queue BG][BATCH-START] Embedding Provider: ${embeddingConfig.provider.toUpperCase()}`)
+  console.log(`[Process Queue BG][BATCH-START] Dimensions: ${embeddingConfig.dimensions}D`)
+  console.log(`[Process Queue BG][BATCH-START] Multimodal Support: ${embeddingConfig.supportsMultimodal ? 'YES (CLIP)' : 'NO (Caption-based)'}`)
+  console.log(`[Process Queue BG][BATCH-START] ========================================`)
 
   let processedCount = 0
   let failedCount = 0
@@ -140,7 +159,7 @@ async function processQueueInBackground(
         throw new Error(`Photo not found: ${photoError?.message}`)
       }
 
-      console.log(`[Process Queue BG] Processing photo ${photo.id}: ${photo.name}`)
+      console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Processing photo ${photo.id}: ${photo.name}`)
 
       // Fetch image from storage
       console.log(`[Process Queue BG] Fetching image from: ${photo.file_url}`)
@@ -154,31 +173,65 @@ async function processQueueInBackground(
       const base64Data = Buffer.from(imageBuffer).toString('base64')
       console.log(`[Process Queue BG] Base64 conversion complete (${base64Data.length} chars)`)
 
-      // Step 1: Generate caption
-      console.log(`[Process Queue BG] Generating caption for ${photo.name}`)
+      // Step 1: Generate caption using OpenAI (always, regardless of provider)
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] 📝 Step 1: Generating caption with OpenAI GPT-4 Vision`)
       const caption = await generateImageCaption(base64Data, photo.type)
-      console.log(`[Process Queue BG] Caption generated: ${caption.substring(0, 100)}...`)
 
-      // Step 2: Generate embedding
-      console.log(`[Process Queue BG] Generating embedding for ${photo.name}`)
-      const embedding = await generateTextEmbedding(caption)
-      console.log(`[Process Queue BG] Embedding generated (${embedding.length} dimensions)`)
+      if (!caption) {
+        throw new Error("Failed to generate caption")
+      }
 
-      // Step 3: Update photo with caption and embedding
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] ✓ Caption: ${caption.substring(0, 100)}...`)
+
+      // Step 2: Generate embeddings based on provider
+      let openaiEmbedding: number[]
+      let clipEmbedding: number[] | null = null
+
+      if (embeddingConfig.supportsMultimodal) {
+        // CLIP provider - generate BOTH embeddings using CLIP (same 512D space!)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] 🎨 Generating pure CLIP embeddings`)
+
+        // CLIP text embedding from caption (512D) - in same space as image!
+        const { generateCLIPTextEmbedding } = await import("@/lib/services/huggingface")
+        openaiEmbedding = await generateCLIPTextEmbedding(caption)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP text embedding (caption): ${openaiEmbedding.length}D`)
+
+        // CLIP direct image embedding (512D) - same space!
+        clipEmbedding = await generateImageEmbedding(base64Data, photo.type)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP image embedding: ${clipEmbedding.length}D`)
+      } else {
+        // OpenAI provider - caption-based approach
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] 📝 Generating OpenAI text embedding from caption`)
+
+        const { generateTextEmbedding: openaiTextEmbedding } = await import("@/lib/services/openai")
+        openaiEmbedding = await openaiTextEmbedding(caption)
+        console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] ✓ OpenAI embedding: ${openaiEmbedding.length}D`)
+      }
+
+      // Step 3: Prepare update data
+      const updateData: any = {
+        caption, // OpenAI GPT-4 Vision generated caption (for display)
+        embedding: JSON.stringify(openaiEmbedding), // CLIP text embedding from caption (512D) OR OpenAI (1536D)
+        processing_status: 'processing', // Will be set to 'completed' after face detection
+      }
+
+      // Add CLIP image embedding if available (CLIP mode)
+      if (clipEmbedding) {
+        updateData.embedding_clip = JSON.stringify(clipEmbedding) // 512D CLIP direct image embedding
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ Saving both CLIP embeddings - Text: ${openaiEmbedding.length}D, Image: ${clipEmbedding.length}D`)
+      }
+
+      // Step 4: Update photo with caption and embeddings
       const { error: updateError } = await supabase
         .from('photos')
-        .update({
-          caption,
-          embedding,
-          processing_status: 'processing', // Will be set to 'completed' after face detection
-        })
+        .update(updateData)
         .eq('id', photo.id)
 
       if (updateError) {
         throw new Error(`Failed to update photo: ${updateError.message}`)
       }
 
-      // Step 4: Face Detection (if enabled)
+      // Step 5: Face Detection (if enabled)
       const enableFaceDetection = process.env.ENABLE_FACE_DETECTION === "true"
 
       if (enableFaceDetection) {
@@ -262,7 +315,7 @@ async function processQueueInBackground(
         .eq('id', photo.id)
 
       processedCount++
-      console.log(`[Process Queue BG] Successfully processed ${photo.name} (${processedCount}/${queueItems.length})`)
+      console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount}/${queueItems.length}] ✅ SUCCESS - ${photo.name}`)
     } catch (error) {
       failedCount++
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -306,9 +359,12 @@ async function processQueueInBackground(
     }
   }
 
-  console.log(
-    `[Process Queue BG] Completed: ${processedCount} successful, ${failedCount} failed`
-  )
+  console.log(`[Process Queue BG][BATCH-END] ========================================`)
+  console.log(`[Process Queue BG][BATCH-END] Batch Processing Complete`)
+  console.log(`[Process Queue BG][BATCH-END] Provider Used: ${embeddingConfig.provider.toUpperCase()}`)
+  console.log(`[Process Queue BG][BATCH-END] Results: ${processedCount} successful, ${failedCount} failed`)
+  console.log(`[Process Queue BG][BATCH-END] Total: ${processedCount + failedCount}/${queueItems.length} processed`)
+  console.log(`[Process Queue BG][BATCH-END] ========================================`)
 
   return { processedCount, failedCount }
 }

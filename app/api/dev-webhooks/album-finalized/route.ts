@@ -38,8 +38,48 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceRoleClient()
 
     try {
+      // SECURITY CHECK: Verify all photo IDs belong to the user
+      // Even though the calling endpoint should validate this, we double-check for defense-in-depth
+      const { data: verifiedPhotos, error: verifyError } = await supabase
+        .from("photos")
+        .select("id")
+        .in("id", photoIds)
+        .eq("user_id", requestUser.id)
+
+      if (verifyError) {
+        console.error("[Fallback] Error verifying photo ownership:", verifyError)
+        return NextResponse.json(
+          { error: "Failed to verify photo ownership" },
+          { status: 500 }
+        )
+      }
+
+      const verifiedPhotoIds = verifiedPhotos?.map(p => p.id) || []
+      const unauthorizedPhotoIds = photoIds.filter(id => !verifiedPhotoIds.includes(id))
+
+      if (unauthorizedPhotoIds.length > 0) {
+        console.error(`[Fallback] ⚠️ SECURITY BREACH: Attempted to create album with ${unauthorizedPhotoIds.length} unauthorized photos!`)
+        console.error(`[Fallback] User ID: ${requestUser.id}, Unauthorized photo IDs:`, unauthorizedPhotoIds)
+        return NextResponse.json(
+          { error: "Some photos do not belong to the user" },
+          { status: 403 }
+        )
+      }
+
+      console.log(`[Fallback] ✓ All ${photoIds.length} photos verified to belong to user ${requestUser.id}`)
+
       // Get cover photo ID (not URL - just like photos field stores IDs)
       const coverPhotoIdToUse = coverPhotoId || photoIds[0]
+
+      // Verify cover photo also belongs to user
+      if (!verifiedPhotoIds.includes(coverPhotoIdToUse)) {
+        console.error(`[Fallback] ⚠️ SECURITY BREACH: Cover photo ${coverPhotoIdToUse} does not belong to user ${requestUser.id}`)
+        return NextResponse.json(
+          { error: "Cover photo does not belong to the user" },
+          { status: 403 }
+        )
+      }
+
       console.log(`[Fallback] Using cover photo ID: ${coverPhotoIdToUse}`)
 
       // Create album - store photo ID in cover_image_url (not actual URL)

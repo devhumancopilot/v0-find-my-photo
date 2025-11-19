@@ -12,12 +12,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, FolderOpen, Upload } from "lucide-react"
+import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, FolderOpen, Upload, Eye } from "lucide-react"
 import { PhotoGallery } from "@/components/photo-gallery"
 import { LogoutButton } from "@/components/logout-button"
 import { FaceProfilesSection } from "@/components/face-profiles-section"
 import { QueueNotificationBanner } from "@/components/queue-notification-banner"
 import { FavoriteButton } from "@/components/favorite-button"
+import { AlbumCard } from "@/components/album-card"
+import { AlbumsCarousel } from "@/components/albums-carousel"
+import { PhotosCarousel } from "@/components/photos-carousel"
+import { LoadingLink } from "@/components/loading-link"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -72,13 +76,26 @@ export default async function DashboardPage() {
       // Get cover image URL by resolving the photo ID
       let coverImageUrl = "/placeholder.svg"
       if (album.cover_image_url) {
-        const { data: coverPhoto } = await supabase
-          .from("photos")
-          .select("file_url")
-          .eq("id", parseInt(album.cover_image_url))
-          .single()
+        try {
+          const photoId = parseInt(album.cover_image_url)
+          if (!isNaN(photoId)) {
+            const { data: coverPhoto, error: photoError } = await supabase
+              .from("photos")
+              .select("file_url")
+              .eq("id", photoId)
+              .single()
 
-        coverImageUrl = coverPhoto?.file_url || "/placeholder.svg"
+            if (photoError) {
+              console.error(`Failed to fetch cover photo for album ${album.id}:`, photoError)
+            } else if (coverPhoto?.file_url) {
+              coverImageUrl = coverPhoto.file_url
+            } else {
+              console.warn(`No file_url found for photo ID ${photoId} (album ${album.id})`)
+            }
+          }
+        } catch (error) {
+          console.error(`Error resolving cover image for album ${album.id}:`, error)
+        }
       }
 
       // Calculate actual photo count from photos array
@@ -140,19 +157,6 @@ export default async function DashboardPage() {
           </Link>
 
           <div className="flex items-center gap-4">
-            <Link href="/upload-photos">
-              <Button variant="outline" className="bg-white/60">
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Photos
-              </Button>
-            </Link>
-            <Link href="/create-album">
-              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700">
-                <Plus className="mr-2 h-4 w-4" />
-                Create Album
-              </Button>
-            </Link>
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -236,12 +240,14 @@ export default async function DashboardPage() {
                 <h3 className="mb-1 text-xl font-semibold">Upload Photos</h3>
                 <p className="text-white/90">Add photos to your collection for AI-powered organization</p>
               </div>
-              <Link href="/upload-photos">
-                <Button size="lg" className="w-full bg-white text-purple-600 hover:bg-white/90">
-                  <Upload className="mr-2 h-5 w-5" />
-                  Upload Now
-                </Button>
-              </Link>
+              <LoadingLink
+                href="/upload-photos"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-8 text-purple-600 font-medium ring-offset-background transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                loadingMessage="Loading upload page..."
+              >
+                <Upload className="h-5 w-5" />
+                Upload Now
+              </LoadingLink>
             </CardContent>
           </Card>
           <Card className="border-white/20 bg-gradient-to-r from-purple-500 to-pink-600 text-white">
@@ -250,12 +256,14 @@ export default async function DashboardPage() {
                 <h3 className="mb-1 text-xl font-semibold">Create Album</h3>
                 <p className="text-white/90">Let AI help you discover the perfect photos from your collection</p>
               </div>
-              <Link href="/create-album">
-                <Button size="lg" className="w-full bg-white text-pink-600 hover:bg-white/90">
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  Create Album
-                </Button>
-              </Link>
+              <LoadingLink
+                href="/create-album"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white px-8 text-pink-600 font-medium ring-offset-background transition-colors hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                loadingMessage="Loading create album page..."
+              >
+                <Sparkles className="h-5 w-5" />
+                Create Album
+              </LoadingLink>
             </CardContent>
           </Card>
         </div>
@@ -267,77 +275,17 @@ export default async function DashboardPage() {
               <h2 className="text-2xl font-bold text-foreground">Your Albums</h2>
               <p className="text-sm text-muted-foreground">Browse and manage your photo albums</p>
             </div>
-            <Button variant="outline" className="bg-white/60">
-              View All
-            </Button>
+            <LoadingLink
+              href="/albums"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-white/60 px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              loadingMessage="Loading albums..."
+            >
+              <Eye className="h-4 w-4" />
+              See All
+            </LoadingLink>
           </div>
 
-          {albums && albums.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {albums.map((album) => (
-                <Card
-                  key={album.id}
-                  className="group overflow-hidden border-white/20 bg-white/60 backdrop-blur-sm transition-all hover:shadow-lg"
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden">
-                    <img
-                      src={album.cover_image_url || "/placeholder.svg"}
-                      alt={album.album_title}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                    {/* Favorite Button - Top Right Corner */}
-                    <div className="absolute top-3 right-3 z-10">
-                      <FavoriteButton
-                        itemId={album.id}
-                        itemType="album"
-                        initialIsFavorite={album.is_favorite || false}
-                        variant="ghost"
-                        size="icon"
-                        showLabel={false}
-                      />
-                    </div>
-                    <div className="absolute bottom-4 left-4 right-4 translate-y-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-                      <Link href={`/albums/${album.id}`}>
-                        <Button size="sm" className="w-full bg-white text-foreground hover:bg-white/90">
-                          View Album
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{album.album_title}</CardTitle>
-                    <CardDescription className="flex items-center gap-4 text-sm">
-                      <span className="flex items-center gap-1">
-                        <ImageIcon className="h-4 w-4" />
-                        {album.photo_count} photos
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        {new Date(album.created_at).toLocaleDateString()}
-                      </span>
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <FolderOpen className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="mb-2 text-xl font-semibold text-foreground">No albums yet</h3>
-                <p className="mb-6 text-muted-foreground">Create your first album to get started</p>
-                <Link href="/create-album">
-                  <Button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Your First Album
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          )}
+          <AlbumsCarousel albums={albums || []} />
         </div>
 
         {/* Photos Section */}
@@ -349,12 +297,14 @@ export default async function DashboardPage() {
                 All photos in your collection {photoCount ? `(${photoCount} total)` : ""}
               </p>
             </div>
-            <Link href="/upload-photos">
-              <Button variant="outline" className="bg-white/60">
-                <Upload className="mr-2 h-4 w-4" />
-                Upload More
-              </Button>
-            </Link>
+            <LoadingLink
+              href="/photos"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-white/60 px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              loadingMessage="Loading photos..."
+            >
+              <Eye className="h-4 w-4" />
+              See All
+            </LoadingLink>
           </div>
 
           {photosError && (
@@ -365,7 +315,7 @@ export default async function DashboardPage() {
             </Card>
           )}
 
-          {!photosError && <PhotoGallery photos={photos || []} />}
+          {!photosError && <PhotosCarousel photos={photos || []} />}
         </div>
       </main>
     </div>

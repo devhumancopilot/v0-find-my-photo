@@ -1,0 +1,16 @@
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Machine Learning
+torch==2.1.0
+torchvision==0.16.0
+transformers==4.35.2
+Pillow==10.1.0
+
+# NumPy - pin to 1.x for compatibility with PyTorch/Transformers
+numpy<2.0.0
+
+# Utilities
+python-multipart==0.0.6

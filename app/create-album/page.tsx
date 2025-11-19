@@ -235,23 +235,30 @@ export default function CreateAlbumPage() {
                       Cancel
                     </Link>
                   </Button>
-                  <Button
-                    onClick={handleNext}
-                    disabled={!canProceed || isProcessing}
-                    className="flex-1 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        AI is finding photos...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Find Photos
-                      </>
+                  <div className="flex-1 w-full space-y-2">
+                    <Button
+                      onClick={handleNext}
+                      disabled={!canProceed || isProcessing}
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          AI is finding photos...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Find Photos
+                        </>
+                      )}
+                    </Button>
+                    {isProcessing && (
+                      <p className="text-xs text-center text-blue-600 font-medium">
+                        Our AI is analyzing your photo collection to find the best matches. This may take a moment...
+                      </p>
                     )}
-                  </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -412,33 +419,40 @@ export default function CreateAlbumPage() {
                   </div>
                 </div>
 
-                <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-3">
-                  <Button
-                    onClick={handleBack}
-                    variant="outline"
-                    className="flex-1 w-full bg-transparent"
-                    disabled={isProcessing}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button
-                    onClick={handleNext}
-                    disabled={isProcessing}
-                    className="flex-1 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating Album...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="mr-2 h-4 w-4" />
-                        Create Album
-                      </>
-                    )}
-                  </Button>
+                <div className="space-y-3">
+                  <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-3">
+                    <Button
+                      onClick={handleBack}
+                      variant="outline"
+                      className="flex-1 w-full bg-transparent"
+                      disabled={isProcessing}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button
+                      onClick={handleNext}
+                      disabled={isProcessing}
+                      className="flex-1 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating Album...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="mr-2 h-4 w-4" />
+                          Create Album
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {isProcessing && (
+                    <p className="text-xs text-center text-blue-600 font-medium">
+                      Organizing your {selectedPhotos.length} photo{selectedPhotos.length !== 1 ? 's' : ''} into a beautiful album. Almost done!
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
