@@ -6,7 +6,7 @@ The enhanced photo search algorithm combines **semantic vector search** with **m
 
 ## Architecture
 
-```
+\`\`\`
 User Query
     ↓
 1. Query Enhancement (GPT-4)
@@ -20,7 +20,7 @@ User Query
 5. Diversity Re-Ranking
     ↓
 Enhanced Results
-```
+\`\`\`
 
 ## Components
 
@@ -34,7 +34,7 @@ Enhanced Results
 - Enhances query with richer semantic meaning
 
 **Example**:
-```typescript
+\`\`\`typescript
 Input: "beach photos from last summer with my dog"
 
 Output: {
@@ -48,7 +48,7 @@ Output: {
   },
   searchIntent: "temporal"
 }
-```
+\`\`\`
 
 ### 2. Multi-Signal Ranking
 
@@ -66,7 +66,7 @@ Combines multiple signals to calculate relevance score:
 | **Diversity Penalty** | -0-5% | Reduces similar photos in results |
 
 #### Final Score Calculation:
-```
+\`\`\`
 finalScore = min(1.0,
   embeddingSimilarity +
   recencyBoost +
@@ -75,7 +75,7 @@ finalScore = min(1.0,
   temporalRelevance -
   diversityPenalty
 )
-```
+\`\`\`
 
 ### 3. Smart Re-Ranking with Diversity
 
@@ -88,7 +88,7 @@ finalScore = min(1.0,
 - Re-sorts by adjusted final score
 
 **Example**:
-```
+\`\`\`
 Before:
 1. beach_sunset_1.jpg (85%)
 2. beach_sunset_2.jpg (84%)
@@ -100,7 +100,7 @@ After Re-Ranking:
 2. mountain_hike.jpg (75%)
 3. beach_sunset_2.jpg (79% - penalty applied)
 4. beach_sunset_3.jpg (78% - penalty applied)
-```
+\`\`\`
 
 ### 4. Temporal Relevance
 
@@ -119,7 +119,7 @@ After Re-Ranking:
 
 ### Environment Variables
 
-```env
+\`\`\`env
 # Minimum similarity threshold (0.0 - 1.0)
 PHOTO_SEARCH_MIN_SIMILARITY=0.35
 
@@ -128,13 +128,13 @@ USE_LOCAL_WEBHOOKS=true
 
 # Enable/disable webhook fallback
 ENABLE_WEBHOOK_FALLBACK=true
-```
+\`\`\`
 
 ### Tuning Parameters
 
 In `search-enhancement.ts`:
 
-```typescript
+\`\`\`typescript
 // Recency boost weight (0.1 = 10% max boost)
 const recencyFactor = Math.max(0, 1 - daysSincePhoto / 365)
 const recencyBoost = recencyFactor * 0.1
@@ -150,34 +150,34 @@ const diversityPenalty = 0.05
 
 // Diversity sliding window size
 const diversityWindow = 3
-```
+\`\`\`
 
 ## Usage
 
 ### Enable Enhanced Search
 
 Set environment variable:
-```env
+\`\`\`env
 USE_LOCAL_WEBHOOKS=true
-```
+\`\`\`
 
 ### API Endpoint
 
-```
+\`\`\`
 POST /api/dev-webhooks/find-photos
-```
+\`\`\`
 
 **Request**:
-```json
+\`\`\`json
 {
   "user": { "id": "user-id", "email": "user@example.com" },
   "query": "beach photos from summer with my dog",
   "albumTitle": "Summer Vacation"
 }
-```
+\`\`\`
 
 **Response**:
-```json
+\`\`\`json
 {
   "success": true,
   "photos": [
@@ -200,7 +200,7 @@ POST /api/dev-webhooks/find-photos
   "searchType": "text",
   "enhanced": true
 }
-```
+\`\`\`
 
 ## Performance
 
@@ -238,40 +238,40 @@ POST /api/dev-webhooks/find-photos
 ## Example Queries
 
 ### Temporal Search
-```
+\`\`\`
 "photos from last Christmas"
 → Boosts: winter season + last year timeframe
-```
+\`\`\`
 
 ### Categorical Search
-```
+\`\`\`
 "pictures of my cat playing"
 → Boosts: caption keywords (cat, playing)
-```
+\`\`\`
 
 ### Location-Based Search
-```
+\`\`\`
 "beach sunset photos"
 → Boosts: location keywords + activity context
-```
+\`\`\`
 
 ### People Search
-```
+\`\`\`
 "family gathering at grandma's house"
 → Boosts: people context + location hints
-```
+\`\`\`
 
 ## Debugging
 
 Enable detailed logging by checking console output:
 
-```
+\`\`\`
 [Fallback][ENHANCED] 🚀 Applying enhanced search algorithm...
 [Search Enhancement] Enhanced query: "..."
 [Search Enhancement] Top 5 results:
   1. Score: 87.5% - beach_sunset_1.jpg
      Breakdown: Embedding=75%, Recency=5%, Favorite=15%, Caption=8%
-```
+\`\`\`
 
 ## Future Enhancements
 

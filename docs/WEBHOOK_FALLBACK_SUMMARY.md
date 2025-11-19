@@ -13,24 +13,24 @@
 ## Quick Start
 
 ### 1. Install OpenAI Package
-```bash
+\`\`\`bash
 npm install openai
-```
+\`\`\`
 
 ### 2. Add Your OpenAI API Key
 Edit `.env.local` and replace:
-```bash
+\`\`\`bash
 OPENAI_API_KEY=your_openai_api_key_here
-```
+\`\`\`
 
 With your actual key from: https://platform.openai.com/api-keys
 
 ### 3. Configuration (Already Set)
-```bash
+\`\`\`bash
 USE_LOCAL_WEBHOOKS=false           # Use N8N first
 ENABLE_WEBHOOK_FALLBACK=true       # Fallback if N8N fails
 STORE_BASE64_IN_DB=false           # Save DB space
-```
+\`\`\`
 
 ### 4. Test It
 Upload some photos and watch the logs:
@@ -41,13 +41,13 @@ Upload some photos and watch the logs:
 
 ## How It Works
 
-```
+\`\`\`
 User Upload → Next.js API → N8N (try first)
                               ↓ (if fails)
                             Local Handler (automatic)
                               ↓
                          OpenAI + Supabase
-```
+\`\`\`
 
 **Normal operation:** N8N handles everything
 **When N8N fails:** Local handlers kick in automatically
@@ -79,23 +79,23 @@ User Upload → Next.js API → N8N (try first)
 ## Configuration Modes
 
 ### Mode 1: Production (Recommended)
-```bash
+\`\`\`bash
 USE_LOCAL_WEBHOOKS=false
 ENABLE_WEBHOOK_FALLBACK=true
-```
+\`\`\`
 **Result:** N8N primary, automatic fallback for reliability
 
 ### Mode 2: Local Development
-```bash
+\`\`\`bash
 USE_LOCAL_WEBHOOKS=true
-```
+\`\`\`
 **Result:** Skip N8N, use local handlers only (faster iteration)
 
 ### Mode 3: N8N Only
-```bash
+\`\`\`bash
 USE_LOCAL_WEBHOOKS=false
 ENABLE_WEBHOOK_FALLBACK=false
-```
+\`\`\`
 **Result:** N8N only, no fallback (fails if N8N fails)
 
 ---

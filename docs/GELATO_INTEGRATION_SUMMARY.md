@@ -87,7 +87,7 @@ Built with shadcn/ui:
 
 ## 📁 File Structure
 
-```
+\`\`\`
 FindMyPhoto/
 ├── lib/gelato/
 │   ├── types.ts              # TypeScript definitions
@@ -120,7 +120,7 @@ FindMyPhoto/
 │
 └── .env
     └── GELATO_API_KEY=...    # Configuration
-```
+\`\`\`
 
 ---
 
@@ -132,9 +132,9 @@ FindMyPhoto/
 2. Go to API section in dashboard
 3. Generate an API key (use TEST key for development)
 4. Add to `.env`:
-   ```bash
+   \`\`\`bash
    GELATO_API_KEY=your-gelato-api-key-here
-   ```
+   \`\`\`
 
 ### 2. That's it!
 
@@ -157,7 +157,7 @@ The database migration has already been applied, all code is in place, and the U
 
 ### As a Developer:
 
-```typescript
+\`\`\`typescript
 // Get products
 const products = await fetch('/api/gelato/products')
 
@@ -184,7 +184,7 @@ const order = await fetch('/api/gelato/order', {
     recipient: { /* shipping details */ }
   })
 })
-```
+\`\`\`
 
 ---
 

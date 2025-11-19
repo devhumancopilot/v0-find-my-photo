@@ -22,7 +22,7 @@ All features have been implemented, including the PDF generation system using Pu
 
 ## 🏗️ Architecture Overview
 
-```
+\`\`\`
 ┌──────────────────────────────────────────────────────┐
 │             COMPLETE GELATO INTEGRATION              │
 └──────────────────────────────────────────────────────┘
@@ -43,7 +43,7 @@ Technical Stack:
 ├── Storage: Supabase Storage
 ├── PDF: Puppeteer
 └── Print: Gelato API
-```
+\`\`\`
 
 ---
 
@@ -96,7 +96,7 @@ You already have:
 
 ### 2. Test the System
 
-```bash
+\`\`\`bash
 # Start development server
 npm run dev
 
@@ -105,7 +105,7 @@ http://localhost:3000/albums/[id]/print
 
 # Click "Order Physical Print"
 # Follow the 3-step wizard
-```
+\`\`\`
 
 ### 3. Verify Everything Works
 
@@ -137,7 +137,7 @@ http://localhost:3000/albums/[id]/print
 
 ### Complete Order Flow
 
-```typescript
+\`\`\`typescript
 // User clicks "Place Order" in PrintOrderDialog
 
 // 1. Generate PDF (NEW!)
@@ -168,7 +168,7 @@ const orderResponse = await fetch("/api/gelato/order", {
 // → Returns order confirmation
 
 // 3. User sees success and can track at /orders
-```
+\`\`\`
 
 ---
 
@@ -208,7 +208,7 @@ const orderResponse = await fetch("/api/gelato/order", {
 
 ### Environment Variables
 
-```bash
+\`\`\`bash
 # Already configured in .env
 GELATO_API_KEY=6b3593df-40b3-4941-924e-2e4b2faeca45-...
 GELATO_API_BASE_URL=https://order.gelatoapis.com
@@ -216,7 +216,7 @@ GELATO_API_BASE_URL=https://order.gelatoapis.com
 # Supabase (already configured)
 NEXT_PUBLIC_SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
-```
+\`\`\`
 
 ### Supabase Storage
 
@@ -299,7 +299,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ### Adding New Products
 
-```typescript
+\`\`\`typescript
 // lib/gelato/products.ts
 export const PHOTO_BOOK_PRODUCTS: PhotoBookProduct[] = [
   // ...existing products
@@ -312,28 +312,28 @@ export const PHOTO_BOOK_PRODUCTS: PhotoBookProduct[] = [
     maxPages: 200,
   },
 ]
-```
+\`\`\`
 
 ### Customizing PDF Layout
 
-```typescript
+\`\`\`typescript
 // lib/pdf/generator.ts
 // Modify generatePrintHTML() function
 // Add new layout templates
 // Customize cover page design
 // Adjust styling and spacing
-```
+\`\`\`
 
 ### Adding Countries
 
-```typescript
+\`\`\`typescript
 // components/print-order-dialog.tsx
 <SelectContent>
   <SelectItem value="US">United States</SelectItem>
   <SelectItem value="JP">Japan</SelectItem> {/* NEW */}
   <SelectItem value="BR">Brazil</SelectItem> {/* NEW */}
 </SelectContent>
-```
+\`\`\`
 
 ---
 

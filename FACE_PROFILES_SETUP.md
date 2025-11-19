@@ -23,10 +23,10 @@ The Face Profiles feature has been fully implemented. This guide will help you s
 
 **Before enabling face detection, you MUST run the database migration:**
 
-```bash
+\`\`\`bash
 # In Supabase SQL Editor, run:
 migrations/003_add_face_profiles.sql
-```
+\`\`\`
 
 **This migration:**
 - ✅ Creates `face_profiles` table
@@ -36,22 +36,22 @@ migrations/003_add_face_profiles.sql
 - ✅ Safe to run on live database (uses `IF NOT EXISTS`)
 
 **To verify migration:**
-```sql
+\`\`\`sql
 -- Check if table exists
 SELECT * FROM information_schema.tables
 WHERE table_schema = 'public' AND table_name = 'face_profiles';
 
 -- Check pgvector extension
 SELECT * FROM pg_extension WHERE extname = 'vector';
-```
+\`\`\`
 
 ---
 
 ### Step 2: Install Dependencies
 
-```bash
+\`\`\`bash
 npm install @vladmandic/face-api @tensorflow/tfjs-node canvas
-```
+\`\`\`
 
 **Package sizes:**
 - @vladmandic/face-api: ~5MB
@@ -66,7 +66,7 @@ Face-api.js requires model files (~15MB total). You have **two options:**
 
 #### Option A: Download Models to Project (Recommended)
 
-```bash
+\`\`\`bash
 # Create models directory
 mkdir -p public/models
 
@@ -83,17 +83,17 @@ cd public/models
 # - face_landmark_68_model-shard1
 # - face_recognition_model-weights_manifest.json
 # - face_recognition_model-shard1
-```
+\`\`\`
 
 **Direct download links:**
-```
+\`\`\`
 https://github.com/vladmandic/face-api/raw/master/model/ssd_mobilenetv1_model-weights_manifest.json
 https://github.com/vladmandic/face-api/raw/master/model/ssd_mobilenetv1_model-shard1
 https://github.com/vladmandic/face-api/raw/master/model/face_landmark_68_model-weights_manifest.json
 https://github.com/vladmandic/face-api/raw/master/model/face_landmark_68_model-shard1
 https://github.com/vladmandic/face-api/raw/master/model/face_recognition_model-weights_manifest.json
 https://github.com/vladmandic/face-api/raw/master/model/face_recognition_model-shard1
-```
+\`\`\`
 
 #### Option B: Use CDN (Not recommended for production)
 
@@ -105,7 +105,7 @@ Models will be loaded from a CDN at runtime (slower, requires internet).
 
 Edit `.env.local`:
 
-```bash
+\`\`\`bash
 # Enable face detection
 ENABLE_FACE_DETECTION=true
 
@@ -114,15 +114,15 @@ FACE_MATCHING_THRESHOLD=0.4
 
 # Optional: Minimum confidence (default: 0.5)
 FACE_MIN_CONFIDENCE=0.5
-```
+\`\`\`
 
 ---
 
 ### Step 5: Restart Development Server
 
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
 Models will be loaded on first use (~5-10 seconds startup time).
 
@@ -132,7 +132,7 @@ Models will be loaded on first use (~5-10 seconds startup time).
 
 ### Upload Flow
 
-```
+\`\`\`
 1. User uploads photo
     ↓
 2. Photo processed (caption, embedding, storage)
@@ -147,7 +147,7 @@ Models will be loaded on first use (~5-10 seconds startup time).
     └─ Store in face_profiles table
     ↓
 5. Upload complete
-```
+\`\`\`
 
 ### Face Matching Algorithm
 
@@ -168,13 +168,13 @@ Models will be loaded on first use (~5-10 seconds startup time).
 
 ### 1. Get Face Profiles (Grouped)
 
-```http
+\`\`\`http
 GET /api/face-profiles
 Authorization: Bearer <token>
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "unknown_faces": {
@@ -196,11 +196,11 @@ Authorization: Bearer <token>
   "total_faces": 39,
   "total_people": 2
 }
-```
+\`\`\`
 
 ### 2. Update Face Name
 
-```http
+\`\`\`http
 PATCH /api/face-profiles/{id}
 Authorization: Bearer <token>
 Content-Type: application/json
@@ -208,11 +208,11 @@ Content-Type: application/json
 {
   "face_name": "John Doe"
 }
-```
+\`\`\`
 
 ### 3. Bulk Update Face Names
 
-```http
+\`\`\`http
 POST /api/face-profiles/bulk-update
 Authorization: Bearer <token>
 Content-Type: application/json
@@ -221,23 +221,23 @@ Content-Type: application/json
   "face_profile_ids": [1, 2, 3, 4, 5],
   "face_name": "John Doe"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "updated_count": 5,
   "message": "Successfully updated 5 face profile(s)"
 }
-```
+\`\`\`
 
 ### 4. Delete Face Profile
 
-```http
+\`\`\`http
 DELETE /api/face-profiles/{id}
 Authorization: Bearer <token>
-```
+\`\`\`
 
 ---
 
@@ -249,7 +249,7 @@ Authorization: Bearer <token>
 2. **Upload a photo with faces** via the UI
 3. **Check logs** for face detection output:
 
-```
+\`\`\`
 [Fallback] Detecting faces in family-photo.jpg
 [FaceAPI] Detecting faces in image...
 [FaceAPI] Detected 3 faces
@@ -260,7 +260,7 @@ Authorization: Bearer <token>
 [Fallback] Face 2/3 profile created
 [Fallback] Face 3/3 is new (no match found)
 [Fallback] Face 3/3 profile created
-```
+\`\`\`
 
 ### Test Face Matching
 
@@ -268,9 +268,9 @@ Authorization: Bearer <token>
 2. **Upload another photo of the same person**
 3. **Check logs** for matching:
 
-```
+\`\`\`
 [Fallback] Face 1/1 matched to: NULL (similarity: 0.750)
-```
+\`\`\`
 
 Wait, if face_name is NULL, it won't match. You need to:
 
@@ -278,13 +278,13 @@ Wait, if face_name is NULL, it won't match. You need to:
 2. **Upload another photo** of the same person
 3. **Should see:**
 
-```
+\`\`\`
 [Fallback] Face 1/1 matched to: John Doe (similarity: 0.750)
-```
+\`\`\`
 
 ### Verify Database
 
-```sql
+\`\`\`sql
 -- Check face profiles
 SELECT
   id,
@@ -306,7 +306,7 @@ FROM photos p
 LEFT JOIN face_profiles fp ON fp.photo_id = p.id
 GROUP BY p.id, p.name, p.face_count
 HAVING COUNT(fp.id) > 0;
-```
+\`\`\`
 
 ---
 
@@ -351,10 +351,10 @@ HAVING COUNT(fp.id) > 0;
 **Error:** `Cannot find TensorFlow native bindings`
 
 **Solution:**
-```bash
+\`\`\`bash
 # Reinstall with correct architecture
 npm install @tensorflow/tfjs-node --build-from-source
-```
+\`\`\`
 
 ### Face Detection Not Running
 
@@ -437,7 +437,7 @@ Create `app/face-profiles/page.tsx`:
 - Photo thumbnails with bounding boxes
 
 **API Calls:**
-```typescript
+\`\`\`typescript
 // Fetch profiles
 const response = await fetch('/api/face-profiles')
 const { unknown_faces, named_faces } = await response.json()
@@ -456,7 +456,7 @@ await fetch('/api/face-profiles/bulk-update', {
     face_name: 'John Doe'
   })
 })
-```
+\`\`\`
 
 ---
 

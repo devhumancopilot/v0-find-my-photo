@@ -60,7 +60,7 @@ You can switch between them using environment variables, just like the n8n/local
 
 Add to your `.env` file:
 
-```bash
+\`\`\`bash
 # Switch to Hugging Face CLIP
 EMBEDDING_PROVIDER=huggingface
 
@@ -69,7 +69,7 @@ HUGGINGFACE_API_KEY=hf_your_token_here
 
 # Optional: Enable variable dimensions (requires migration)
 VARIABLE_EMBEDDING_DIMENSIONS=false
-```
+\`\`\`
 
 ### 3. Choose Your Approach
 
@@ -77,10 +77,10 @@ VARIABLE_EMBEDDING_DIMENSIONS=false
 
 This approach pads 512D CLIP embeddings to 1536D for compatibility with existing database schema.
 
-```bash
+\`\`\`bash
 EMBEDDING_PROVIDER=huggingface
 VARIABLE_EMBEDDING_DIMENSIONS=false  # Uses padding
-```
+\`\`\`
 
 **Pros:**
 - No database migration needed
@@ -95,14 +95,14 @@ VARIABLE_EMBEDDING_DIMENSIONS=false  # Uses padding
 
 Run the migration to use native 512D embeddings.
 
-```bash
+\`\`\`bash
 # 1. Run migration
 psql -U your_user -d your_db -f migrations/014_add_clip_support_optional.sql
 
 # 2. Update environment
 EMBEDDING_PROVIDER=huggingface
 VARIABLE_EMBEDDING_DIMENSIONS=true  # Uses native dimensions
-```
+\`\`\`
 
 **Pros:**
 - More storage efficient
@@ -119,28 +119,28 @@ VARIABLE_EMBEDDING_DIMENSIONS=true  # Uses native dimensions
 ### Photo Upload Flow
 
 #### With OpenAI (Caption-based):
-```
+\`\`\`
 Image → GPT-4o Vision → Caption → text-embedding-3-small → 1536D Vector
-```
+\`\`\`
 
 #### With CLIP (Direct):
-```
+\`\`\`
 Image → CLIP Image Encoder → 512D Vector
 (Optional: GPT-4o for display caption)
-```
+\`\`\`
 
 ### Album Search Flow
 
 #### With OpenAI:
-```
+\`\`\`
 User Query → text-embedding-3-small → 1536D Vector → Match against photos
-```
+\`\`\`
 
 #### With CLIP:
-```
+\`\`\`
 User Query → CLIP Text Encoder → 512D Vector → Match against photos
 (Same vector space as images!)
-```
+\`\`\`
 
 ## API Usage
 
@@ -148,28 +148,28 @@ The integration is transparent - no code changes needed! The unified embedding s
 
 ### Upload Photos
 
-```typescript
+\`\`\`typescript
 // Automatically uses EMBEDDING_PROVIDER from env
 import { generateImageEmbedding } from "@/lib/services/embeddings"
 
 const embedding = await generateImageEmbedding(base64Image, mimeType)
 // Returns 512D (CLIP) or 1536D (OpenAI) based on config
-```
+\`\`\`
 
 ### Search Photos
 
-```typescript
+\`\`\`typescript
 import { generateTextEmbedding } from "@/lib/services/embeddings"
 
 const queryEmbedding = await generateTextEmbedding("sunset at the beach")
 // Returns embedding in same space as stored images
-```
+\`\`\`
 
 ## Testing
 
 ### 1. Upload a Test Photo
 
-```bash
+\`\`\`bash
 # Set CLIP provider
 EMBEDDING_PROVIDER=huggingface
 
@@ -177,16 +177,16 @@ EMBEDDING_PROVIDER=huggingface
 # Check console logs for:
 # "[Fallback] Using huggingface for embeddings (512D)"
 # "[HuggingFace] ✓ Generated 512-dimensional CLIP image embedding"
-```
+\`\`\`
 
 ### 2. Search for Photos
 
-```bash
+\`\`\`bash
 # Create an album with search query
 # Check console logs for:
 # "[Fallback] Using huggingface for search (512D)"
 # "[HuggingFace] ✓ Generated 512-dimensional CLIP text embedding"
-```
+\`\`\`
 
 ### 3. Verify Results
 
@@ -203,12 +203,12 @@ CLIP should provide:
 
 **Solution:** Wait 10-20 seconds and try again. The model will wake up.
 
-```typescript
+\`\`\`typescript
 // The code automatically handles this with wait_for_model option
 options: {
   wait_for_model: true
 }
-```
+\`\`\`
 
 ### Dimension Mismatch Error
 
@@ -217,15 +217,15 @@ options: {
 **Solution:**
 
 Option 1 - Use padding (no migration):
-```bash
+\`\`\`bash
 VARIABLE_EMBEDDING_DIMENSIONS=false
-```
+\`\`\`
 
 Option 2 - Run migration for native support:
-```bash
+\`\`\`bash
 psql -f migrations/014_add_clip_support_optional.sql
 VARIABLE_EMBEDDING_DIMENSIONS=true
-```
+\`\`\`
 
 ### Low Quality Results
 
@@ -248,10 +248,10 @@ VARIABLE_EMBEDDING_DIMENSIONS=true
 #### For New Installations:
 
 1. Set environment variables:
-```bash
+\`\`\`bash
 EMBEDDING_PROVIDER=huggingface
 HUGGINGFACE_API_KEY=your_key
-```
+\`\`\`
 
 2. Start uploading photos - they'll use CLIP automatically
 
@@ -260,10 +260,10 @@ HUGGINGFACE_API_KEY=your_key
 ##### Option A: Backward Compatible (Recommended)
 
 1. Set environment:
-```bash
+\`\`\`bash
 EMBEDDING_PROVIDER=huggingface
 VARIABLE_EMBEDDING_DIMENSIONS=false  # Use padding
-```
+\`\`\`
 
 2. New photos will use CLIP (padded to 1536D)
 3. Old photos still searchable with new photos
@@ -273,14 +273,14 @@ VARIABLE_EMBEDDING_DIMENSIONS=false  # Use padding
 
 1. Backup your database
 2. Run migration:
-```bash
+\`\`\`bash
 psql -f migrations/014_add_clip_support_optional.sql
-```
+\`\`\`
 
 3. Set environment:
-```bash
+\`\`\`bash
 VARIABLE_EMBEDDING_DIMENSIONS=true
-```
+\`\`\`
 
 4. Reprocess all existing photos to generate CLIP embeddings
 
@@ -288,9 +288,9 @@ VARIABLE_EMBEDDING_DIMENSIONS=true
 
 Simply change the environment variable:
 
-```bash
+\`\`\`bash
 EMBEDDING_PROVIDER=openai
-```
+\`\`\`
 
 If using padded CLIP embeddings (VARIABLE_EMBEDDING_DIMENSIONS=false), photos will still be searchable but with lower accuracy.
 
@@ -337,28 +337,28 @@ Based on typical usage:
 ### 2. Database Strategy
 
 **New Installation:**
-```bash
+\`\`\`bash
 EMBEDDING_PROVIDER=huggingface
 VARIABLE_EMBEDDING_DIMENSIONS=false  # Start with padding
-```
+\`\`\`
 
 Later migrate to native if needed.
 
 **Existing Installation:**
-```bash
+\`\`\`bash
 EMBEDDING_PROVIDER=huggingface
 VARIABLE_EMBEDDING_DIMENSIONS=false  # Keep compatibility
-```
+\`\`\`
 
 ### 3. Monitoring
 
 Monitor these logs:
 
-```typescript
+\`\`\`typescript
 "[Fallback] Using huggingface for embeddings (512D)"
 "[HuggingFace] ✓ Generated 512-dimensional CLIP image embedding"
 "[Fallback] Storage embedding: 1536 dimensions"  // With padding
-```
+\`\`\`
 
 ## Technical Details
 
@@ -377,7 +377,7 @@ Monitor these logs:
 
 ### Environment Variables
 
-```bash
+\`\`\`bash
 # Provider selection
 EMBEDDING_PROVIDER=openai|huggingface
 
@@ -387,7 +387,7 @@ HUGGINGFACE_API_KEY=...
 
 # Dimension handling
 VARIABLE_EMBEDDING_DIMENSIONS=true|false
-```
+\`\`\`
 
 ### CLIP Model Details
 
