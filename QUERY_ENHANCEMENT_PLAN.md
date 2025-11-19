@@ -9,20 +9,20 @@
 - Users get irrelevant photos in their albums
 
 **Example:**
-\`\`\`
+```
 User Query: "beach"
 Embedding: [limited semantic richness]
 Results: 🟠 45% similarity - family_picnic.jpg (not a beach!)
          🟠 42% similarity - sunset_city.jpg (not a beach!)
          🟡 65% similarity - beach_vacation.jpg (correct!)
-\`\`\`
+```
 
 ---
 
 ## 🔍 Current Workflow Analysis
 
 ### Step-by-Step Flow:
-\`\`\`
+```
 1. User Input
    ├─ Album Title: "Summer Vacation"
    └─ Description: "beach" ❌ TOO SHORT
@@ -38,7 +38,7 @@ Results: 🟠 45% similarity - family_picnic.jpg (not a beach!)
    ├─ Searches photos table
    ├─ Filters by MIN_SIMILARITY (40-60%)
    └─ Returns low-quality results
-\`\`\`
+```
 
 ### Key Files:
 - **Frontend**: `app/create-album/page.tsx`
@@ -53,7 +53,7 @@ Results: 🟠 45% similarity - family_picnic.jpg (not a beach!)
 
 ### Architecture Overview
 
-\`\`\`
+```
 ┌──────────────────────────────────────────────────────┐
 │              USER INPUT                              │
 │  Description: "beach"                                │
@@ -107,7 +107,7 @@ Results: 🟠 45% similarity - family_picnic.jpg (not a beach!)
 │  • Display expanded query to user                    │
 │  • Quality score indicator                           │
 └──────────────────────────────────────────────────────┘
-\`\`\`
+```
 
 ---
 
@@ -118,7 +118,7 @@ Results: 🟠 45% similarity - family_picnic.jpg (not a beach!)
 **Purpose:** Identify queries that need enhancement
 
 **Checks:**
-\`\`\`typescript
+```typescript
 interface QueryQuality {
   score: 'LOW' | 'MEDIUM' | 'HIGH'
   wordCount: number
@@ -133,7 +133,7 @@ function analyzeQuery(query: string): QueryQuality {
   // MEDIUM: 3-5 words, some context
   // HIGH: 6+ words, rich context
 }
-\`\`\`
+```
 
 **Examples:**
 | Query | Quality | Needs Enhancement |
@@ -149,7 +149,7 @@ function analyzeQuery(query: string): QueryQuality {
 **Purpose:** Use AI to expand short queries into semantically rich descriptions
 
 **Implementation:**
-\`\`\`typescript
+```typescript
 async function enhanceQuery(query: string): Promise<EnhancedQuery> {
   const prompt = `
 You are a semantic search expert. Expand this short photo search query into a rich, detailed description that will help find relevant photos.
@@ -177,10 +177,10 @@ Format as JSON:
 
   return JSON.parse(response.choices[0].message.content)
 }
-\`\`\`
+```
 
 **Example Output:**
-\`\`\`json
+```json
 {
   "original": "beach",
   "expanded": "Photos taken at the beach or seaside, showing sandy shores, ocean waves, blue water, people swimming or relaxing on the beach, beach umbrellas, surfboards, coastal scenery, sunset or sunrise over the water, beach activities like volleyball or building sandcastles.",
@@ -196,7 +196,7 @@ Format as JSON:
     "coastal", "swimming", "vacation", "water", "shore"
   ]
 }
-\`\`\`
+```
 
 ---
 
@@ -205,7 +205,7 @@ Format as JSON:
 **Purpose:** Search with multiple variations for better coverage
 
 **Flow:**
-\`\`\`typescript
+```typescript
 async function multiQuerySearch(enhanced: EnhancedQuery, userId: string) {
   const allQueries = [
     enhanced.expanded,
@@ -253,7 +253,7 @@ function aggregateResults(results: PhotoMatch[]) {
       return b.avgScore - a.avgScore
     })
 }
-\`\`\`
+```
 
 ---
 
@@ -262,7 +262,7 @@ function aggregateResults(results: PhotoMatch[]) {
 **Purpose:** Combine multiple signals for better relevance
 
 **Scoring Factors:**
-\`\`\`typescript
+```typescript
 function calculateHybridScore(photo: Photo, query: EnhancedQuery): number {
   const weights = {
     semantic: 0.6,    // Vector similarity
@@ -288,7 +288,7 @@ function keywordMatchScore(photo: Photo, keywords: string[]): number {
   ).length
   return matchedCount / keywords.length
 }
-\`\`\`
+```
 
 ---
 
@@ -296,7 +296,7 @@ function keywordMatchScore(photo: Photo, keywords: string[]): number {
 
 **Query Input with Real-Time Feedback:**
 
-\`\`\`tsx
+```tsx
 <div className="space-y-4">
   <Textarea
     value={albumDescription}
@@ -370,7 +370,7 @@ function keywordMatchScore(photo: Photo, keywords: string[]): number {
     </Card>
   )}
 </div>
-\`\`\`
+```
 
 ---
 
@@ -441,7 +441,7 @@ function keywordMatchScore(photo: Photo, keywords: string[]): number {
 ## 🎨 Example Transformations
 
 ### Example 1: Single Word
-\`\`\`yaml
+```yaml
 Original: "beach"
 Enhanced: "Photos taken at the beach or seaside, showing sandy shores, ocean waves, blue water, people swimming or relaxing on the beach, beach umbrellas, coastal scenery, sunset over the water."
 Variations:
@@ -449,10 +449,10 @@ Variations:
   - seaside and ocean scenes
   - sandy beach activities
 Result: 45% → 68% avg similarity ✅ (+23%)
-\`\`\`
+```
 
 ### Example 2: Generic Term
-\`\`\`yaml
+```yaml
 Original: "family"
 Enhanced: "Family photos showing multiple people together, family gatherings, group portraits, candid moments with relatives, family celebrations like birthdays or holidays, parents with children, multi-generational photos."
 Variations:
@@ -460,15 +460,15 @@ Variations:
   - group family portraits
   - candid family moments
 Result: 50% → 72% avg similarity ✅ (+22%)
-\`\`\`
+```
 
 ### Example 3: Already Good (No Enhancement)
-\`\`\`yaml
+```yaml
 Original: "photos of our family trip to the beach in California where we built sandcastles and watched the sunset"
 Quality: HIGH
 Action: Use directly (no enhancement needed)
 Result: 78% avg similarity ✅ (no change needed)
-\`\`\`
+```
 
 ---
 
@@ -476,7 +476,7 @@ Result: 78% avg similarity ✅ (no change needed)
 
 Want to start implementing? Here's the first file to create:
 
-\`\`\`typescript
+```typescript
 // lib/services/query-analyzer.ts
 
 export interface QueryQuality {
@@ -534,7 +534,7 @@ export function analyzeQuery(query: string): QueryQuality {
     confidence,
   }
 }
-\`\`\`
+```
 
 ---
 

@@ -11,9 +11,9 @@
   - Verify: Check that `face_profiles` table exists
 
 - [ ] **2. Install NPM Packages**
-  \`\`\`bash
+  ```bash
   npm install @vladmandic/face-api @tensorflow/tfjs-node canvas
-  \`\`\`
+  ```
   - Verify: Run `npm list @vladmandic/face-api`
 
 - [ ] **3. Download Face-API Models**
@@ -35,9 +35,9 @@
   - Optional: Adjust `FACE_MIN_CONFIDENCE=0.5`
 
 - [ ] **5. Restart Development Server**
-  \`\`\`bash
+  ```bash
   npm run dev
-  \`\`\`
+  ```
   - Wait for "Models loaded successfully" log
 
 ---
@@ -54,9 +54,9 @@
 - [ ] **Verify Face Detection**
   - Check logs: `[Fallback] Face 1/X profile created`
   - Query database:
-    \`\`\`sql
+    ```sql
     SELECT * FROM face_profiles ORDER BY created_at DESC LIMIT 5;
-    \`\`\`
+    ```
   - Should see face records
 
 - [ ] **Test API Endpoints**
@@ -94,34 +94,34 @@
 ### Database Verification
 
 - [ ] **face_profiles table exists**
-  \`\`\`sql
+  ```sql
   SELECT * FROM information_schema.tables
   WHERE table_name = 'face_profiles';
-  \`\`\`
+  ```
 
 - [ ] **pgvector extension enabled**
-  \`\`\`sql
+  ```sql
   SELECT * FROM pg_extension WHERE extname = 'vector';
-  \`\`\`
+  ```
 
 - [ ] **RLS policies active**
-  \`\`\`sql
+  ```sql
   SELECT * FROM pg_policies WHERE tablename = 'face_profiles';
-  \`\`\`
+  ```
   - Should see 4 policies (SELECT, INSERT, UPDATE, DELETE)
 
 - [ ] **Functions exist**
-  \`\`\`sql
+  ```sql
   SELECT proname FROM pg_proc
   WHERE proname IN ('match_faces', 'get_face_profiles_grouped', 'bulk_update_face_names');
-  \`\`\`
+  ```
   - Should see all 3 functions
 
 - [ ] **Indexes created**
-  \`\`\`sql
+  ```sql
   SELECT indexname FROM pg_indexes
   WHERE tablename = 'face_profiles';
-  \`\`\`
+  ```
   - Should see 6+ indexes including HNSW vector index
 
 ### Code Verification
@@ -202,9 +202,9 @@
 ### If Something Goes Wrong
 
 - [ ] **Disable face detection**
-  \`\`\`bash
+  ```bash
   ENABLE_FACE_DETECTION=false
-  \`\`\`
+  ```
   - Photo uploads will continue working
   - No face detection runs
 
@@ -257,7 +257,7 @@
 
 ### Key Commands
 
-\`\`\`bash
+```bash
 # Install dependencies
 npm install @vladmandic/face-api @tensorflow/tfjs-node canvas
 
@@ -266,11 +266,11 @@ npm run dev
 
 # Check database
 psql $DATABASE_URL -c "SELECT COUNT(*) FROM face_profiles;"
-\`\`\`
+```
 
 ### Key Configuration
 
-\`\`\`bash
+```bash
 # Enable feature
 ENABLE_FACE_DETECTION=true
 
@@ -279,7 +279,7 @@ FACE_MATCHING_THRESHOLD=0.4
 
 # Minimum confidence (optional)
 FACE_MIN_CONFIDENCE=0.5
-\`\`\`
+```
 
 ---
 

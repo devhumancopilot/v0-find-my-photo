@@ -12,7 +12,7 @@
 
 ### Architecture: Upload-First, Queue-Process Pattern
 
-\`\`\`
+```
 User uploads photos
     ↓
 Upload in batches (10 per request) via multipart/form-data
@@ -28,7 +28,7 @@ Show notification: "Process Now" or "Process Later"
 Background processing: AI captions, embeddings, face detection
     ↓
 Photos ready for search!
-\`\`\`
+```
 
 ## Changes Made
 
@@ -94,7 +94,7 @@ Photos ready for search!
 6. Returns upload results
 
 **Response:**
-\`\`\`json
+```json
 {
   "success": true,
   "uploaded_count": 10,
@@ -104,7 +104,7 @@ Photos ready for search!
   ],
   "errors": []
 }
-\`\`\`
+```
 
 #### `/api/photos/process-queue` (POST)
 
@@ -124,13 +124,13 @@ Photos ready for search!
 4. Retries failed items (up to 3 times)
 
 **Response:**
-\`\`\`json
+```json
 {
   "success": true,
   "message": "Processing started",
   "queue_count": 25
 }
-\`\`\`
+```
 
 ## Benefits
 
@@ -148,13 +148,13 @@ Photos ready for search!
 
 Execute the migration on your Supabase database:
 
-\`\`\`bash
+```bash
 # Copy the SQL content from migrations/011_add_photo_processing_queue.sql
 # and run it in your Supabase SQL Editor
 
 # Or use Supabase CLI if you have it:
 supabase migration up
-\`\`\`
+```
 
 ### 2. Verify Storage Bucket
 
@@ -196,22 +196,22 @@ Ensure the `photos` storage bucket exists with proper policies:
 ### 4. Monitoring
 
 **Check Queue Status:**
-\`\`\`sql
+```sql
 SELECT * FROM queue_statistics WHERE user_id = '<your-user-id>';
-\`\`\`
+```
 
 **Check Pending Items:**
-\`\`\`sql
+```sql
 SELECT * FROM photo_processing_queue
 WHERE status = 'pending'
 ORDER BY created_at DESC;
-\`\`\`
+```
 
 **Check Failed Items:**
-\`\`\`sql
+```sql
 SELECT * FROM photo_processing_queue
 WHERE status = 'failed';
-\`\`\`
+```
 
 ## Configuration
 
@@ -297,7 +297,7 @@ You can adjust these based on your server capacity.
 
 If you need to rollback the migration:
 
-\`\`\`sql
+```sql
 -- Drop new objects
 DROP VIEW IF EXISTS queue_statistics;
 DROP TABLE IF EXISTS photo_processing_queue CASCADE;
@@ -311,7 +311,7 @@ DROP FUNCTION IF EXISTS get_next_processing_batch(INTEGER, UUID);
 DROP FUNCTION IF EXISTS mark_queue_processing(BIGINT);
 DROP FUNCTION IF EXISTS mark_queue_completed(BIGINT);
 DROP FUNCTION IF EXISTS mark_queue_failed(BIGINT, TEXT);
-\`\`\`
+```
 
 ## Questions or Issues?
 

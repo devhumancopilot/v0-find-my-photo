@@ -65,22 +65,22 @@ The **Face Profiles** feature has been successfully implemented! This feature au
 
 **IMPORTANT: Do this first!**
 
-\`\`\`sql
+```sql
 -- In Supabase SQL Editor, run:
 -- migrations/003_add_face_profiles.sql
-\`\`\`
+```
 
 ### 2. Install Dependencies
 
-\`\`\`bash
+```bash
 npm install @vladmandic/face-api @tensorflow/tfjs-node canvas
-\`\`\`
+```
 
 ### 3. Download Model Files
 
 Download face-api.js models (~15MB) to `public/models/`:
 
-\`\`\`
+```
 Required files:
 - ssd_mobilenetv1_model-weights_manifest.json
 - ssd_mobilenetv1_model-shard1
@@ -88,7 +88,7 @@ Required files:
 - face_landmark_68_model-shard1
 - face_recognition_model-weights_manifest.json
 - face_recognition_model-shard1
-\`\`\`
+```
 
 **Download from:**
 https://github.com/vladmandic/face-api/tree/master/model
@@ -97,15 +97,15 @@ https://github.com/vladmandic/face-api/tree/master/model
 
 Edit `.env.local`:
 
-\`\`\`bash
+```bash
 ENABLE_FACE_DETECTION=true
-\`\`\`
+```
 
 ### 5. Restart Server
 
-\`\`\`bash
+```bash
 npm run dev
-\`\`\`
+```
 
 ---
 
@@ -113,7 +113,7 @@ npm run dev
 
 ### New Files (11)
 
-\`\`\`
+```
 migrations/
   └── 003_add_face_profiles.sql             (370 lines)
 
@@ -131,11 +131,11 @@ docs/
 Root:
   ├── FACE_PROFILES_SETUP.md                (450 lines)
   └── IMPLEMENTATION_COMPLETE_SUMMARY.md    (this file)
-\`\`\`
+```
 
 ### Modified Files (2)
 
-\`\`\`
+```
 lib/services/
   └── database.ts                           (+320 lines)
 
@@ -143,7 +143,7 @@ app/api/dev-webhooks/photos-upload/
   └── route.ts                              (+65 lines)
 
 .env.local                                  (+18 lines)
-\`\`\`
+```
 
 **Total Lines Added:** ~2,350 lines of code + documentation
 
@@ -153,7 +153,7 @@ app/api/dev-webhooks/photos-upload/
 
 ### Face Detection Flow
 
-\`\`\`
+```
 ┌─────────────────────────────────────────┐
 │     User Uploads Photo                  │
 └────────────┬────────────────────────────┘
@@ -187,7 +187,7 @@ app/api/dev-webhooks/photos-upload/
 │  - Assigns names to unknown faces       │
 │  - Future uploads auto-link             │
 └─────────────────────────────────────────┘
-\`\`\`
+```
 
 ### Key Components
 

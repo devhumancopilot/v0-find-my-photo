@@ -74,23 +74,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Process Queue] Found ${queueItems.length} photos to process for user ${userId}`)
 
-    // Process in smaller batches to avoid serverless timeout
-    // Take only first 10 items for this batch
-    const batchSize = 10
-    const batchItems = queueItems.slice(0, batchSize)
-
-    console.log(`[Process Queue] Processing batch of ${batchItems.length} photos`)
-
-    // Process synchronously (await) to prevent serverless termination
-    const result = await processQueueInBackground(userId, batchItems, serviceSupabase)
+    // Start processing in the background
+    // Note: In production, you might want to use a job queue system like BullMQ or trigger this via cron
+    processQueueInBackground(userId, queueItems, serviceSupabase)
 
     return NextResponse.json({
       success: true,
-      message: 'Processing completed',
+      message: 'Processing started',
       queue_count: queueItems.length,
-      processed_count: result.processedCount,
-      failed_count: result.failedCount,
-      remaining: queueItems.length - batchItems.length,
     })
   } catch (error) {
     console.error('[Process Queue] Request error:', error)
@@ -124,10 +115,8 @@ async function processQueueInBackground(
 
   for (const queueItem of queueItems) {
     try {
-      console.log(`[Process Queue BG] Starting item ${queueItem.id} (photo ${queueItem.photo_id})`)
-
       // Mark as processing
-      const { error: queueUpdateError } = await supabase
+      await supabase
         .from('photo_processing_queue')
         .update({
           status: 'processing',
@@ -135,18 +124,10 @@ async function processQueueInBackground(
         })
         .eq('id', queueItem.id)
 
-      if (queueUpdateError) {
-        throw new Error(`Failed to update queue status: ${queueUpdateError.message}`)
-      }
-
-      const { error: photoUpdateError } = await supabase
+      await supabase
         .from('photos')
         .update({ processing_status: 'processing' })
         .eq('id', queueItem.photo_id)
-
-      if (photoUpdateError) {
-        throw new Error(`Failed to update photo status: ${photoUpdateError.message}`)
-      }
 
       // Get photo details
       const { data: photo, error: photoError } = await supabase
@@ -162,16 +143,13 @@ async function processQueueInBackground(
       console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Processing photo ${photo.id}: ${photo.name}`)
 
       // Fetch image from storage
-      console.log(`[Process Queue BG] Fetching image from: ${photo.file_url}`)
       const imageResponse = await fetch(photo.file_url)
       if (!imageResponse.ok) {
-        throw new Error(`Failed to fetch image from storage: ${imageResponse.status} ${imageResponse.statusText}`)
+        throw new Error(`Failed to fetch image from storage: ${imageResponse.statusText}`)
       }
 
-      console.log(`[Process Queue BG] Image fetched, converting to base64...`)
       const imageBuffer = await imageResponse.arrayBuffer()
       const base64Data = Buffer.from(imageBuffer).toString('base64')
-      console.log(`[Process Queue BG] Base64 conversion complete (${base64Data.length} chars)`)
 
       // Step 1: Generate caption using OpenAI (always, regardless of provider)
       console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] 📝 Step 1: Generating caption with OpenAI GPT-4 Vision`)
@@ -365,6 +343,4 @@ async function processQueueInBackground(
   console.log(`[Process Queue BG][BATCH-END] Results: ${processedCount} successful, ${failedCount} failed`)
   console.log(`[Process Queue BG][BATCH-END] Total: ${processedCount + failedCount}/${queueItems.length} processed`)
   console.log(`[Process Queue BG][BATCH-END] ========================================`)
-
-  return { processedCount, failedCount }
 }

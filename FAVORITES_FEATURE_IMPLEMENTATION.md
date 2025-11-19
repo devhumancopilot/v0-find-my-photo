@@ -69,7 +69,7 @@ A reusable favorite button component with:
 
 Execute the SQL migration on your Supabase database:
 
-\`\`\`bash
+```bash
 # Option 1: Copy and paste into Supabase SQL Editor
 # Open: migrations/012_add_favorites_feature.sql
 # Copy all contents
@@ -77,13 +77,13 @@ Execute the SQL migration on your Supabase database:
 
 # Option 2: Use Supabase CLI (if installed)
 supabase migration up
-\`\`\`
+```
 
 ### Step 2: Verify Migration Success
 
 Run this query in Supabase SQL Editor:
 
-\`\`\`sql
+```sql
 -- Check if columns exist
 SELECT column_name, data_type
 FROM information_schema.columns
@@ -94,32 +94,32 @@ SELECT column_name, data_type
 FROM information_schema.columns
 WHERE table_name = 'albums'
 AND column_name IN ('is_favorite', 'favorited_at');
-\`\`\`
+```
 
 Expected result: 4 rows (2 columns per table)
 
 ### Step 3: Test the Feature
 
 #### Test 1: Favorite an Album
-\`\`\`bash
+```bash
 1. Go to an album page: /albums/[id]
 2. Click the "Favorite" button
 3. Button should fill with red heart ❤️
 4. Toast notification: "Added to favorites"
 5. Go to dashboard
 6. "Favorites" stat should show "1"
-\`\`\`
+```
 
 #### Test 2: Unfavorite an Album
-\`\`\`bash
+```bash
 1. Click "Favorited" button (filled heart)
 2. Heart should become outline
 3. Toast notification: "Removed from favorites"
 4. Dashboard favorites count decreases
-\`\`\`
+```
 
 #### Test 3: API Test
-\`\`\`bash
+```bash
 # Test the API directly
 curl -X POST http://localhost:3000/api/favorites/albums/1 \
   -H "Content-Type: application/json" \
@@ -131,7 +131,7 @@ curl -X POST http://localhost:3000/api/favorites/albums/1 \
   "is_favorite": true,
   "album_id": 1
 }
-\`\`\`
+```
 
 ---
 
@@ -139,7 +139,7 @@ curl -X POST http://localhost:3000/api/favorites/albums/1 \
 
 ### Basic Usage
 
-\`\`\`tsx
+```tsx
 import { FavoriteButton } from "@/components/favorite-button"
 
 // In your component:
@@ -148,11 +148,11 @@ import { FavoriteButton } from "@/components/favorite-button"
   itemType="photo"
   initialIsFavorite={photo.is_favorite}
 />
-\`\`\`
+```
 
 ### Advanced Usage
 
-\`\`\`tsx
+```tsx
 <FavoriteButton
   itemId={albumId}
   itemType="album"
@@ -165,7 +165,7 @@ import { FavoriteButton } from "@/components/favorite-button"
     // Custom logic here
   }}
 />
-\`\`\`
+```
 
 ### Props Reference
 
@@ -185,23 +185,23 @@ import { FavoriteButton } from "@/components/favorite-button"
 
 ### Photos Table (Extended)
 
-\`\`\`sql
+```sql
 ALTER TABLE photos ADD COLUMN:
 - is_favorite BOOLEAN DEFAULT false
 - favorited_at TIMESTAMPTZ (nullable)
-\`\`\`
+```
 
 ### Albums Table (Extended)
 
-\`\`\`sql
+```sql
 ALTER TABLE albums ADD COLUMN:
 - is_favorite BOOLEAN DEFAULT false
 - favorited_at TIMESTAMPTZ (nullable)
-\`\`\`
+```
 
 ### Indexes Created
 
-\`\`\`sql
+```sql
 -- Fast lookups for favorite photos by user
 CREATE INDEX idx_photos_is_favorite
 ON photos(user_id, is_favorite)
@@ -211,7 +211,7 @@ WHERE is_favorite = true;
 CREATE INDEX idx_albums_is_favorite
 ON albums(user_id, is_favorite)
 WHERE is_favorite = true;
-\`\`\`
+```
 
 ---
 
@@ -219,7 +219,7 @@ WHERE is_favorite = true;
 
 ### Toggle Photo Favorite
 
-\`\`\`http
+```http
 POST /api/favorites/photos/:id
 Authorization: Cookie-based (automatic)
 
@@ -229,11 +229,11 @@ Response:
   "is_favorite": true,
   "photo_id": 123
 }
-\`\`\`
+```
 
 ### Toggle Album Favorite
 
-\`\`\`http
+```http
 POST /api/favorites/albums/:id
 Authorization: Cookie-based (automatic)
 
@@ -243,11 +243,11 @@ Response:
   "is_favorite": true,
   "album_id": 456
 }
-\`\`\`
+```
 
 ### Get All Favorites
 
-\`\`\`http
+```http
 GET /api/favorites
 Authorization: Cookie-based (automatic)
 
@@ -272,7 +272,7 @@ Response:
     "total": 7
   }
 }
-\`\`\`
+```
 
 ---
 
@@ -287,7 +287,7 @@ Response:
 #### 1. Photo Gallery
 Add favorite button to each photo in the gallery:
 
-\`\`\`tsx
+```tsx
 // In components/photo-gallery.tsx or wherever photos are displayed
 <FavoriteButton
   itemId={photo.id}
@@ -297,12 +297,12 @@ Add favorite button to each photo in the gallery:
   showLabel={false}
   variant="ghost"
 />
-\`\`\`
+```
 
 #### 2. Album Grid
 Add to album cards on dashboard:
 
-\`\`\`tsx
+```tsx
 // In dashboard where albums are displayed
 <FavoriteButton
   itemId={album.id}
@@ -311,19 +311,19 @@ Add to album cards on dashboard:
   size="icon"
   showLabel={false}
 />
-\`\`\`
+```
 
 #### 3. Photo Detail/Lightbox
 When viewing a single photo:
 
-\`\`\`tsx
+```tsx
 <FavoriteButton
   itemId={photo.id}
   itemType="photo"
   initialIsFavorite={photo.is_favorite}
   variant="ghost"
 />
-\`\`\`
+```
 
 ---
 
@@ -331,36 +331,36 @@ When viewing a single photo:
 
 ### Get All Favorite Photos
 
-\`\`\`typescript
+```typescript
 const { data: favoritePhotos } = await supabase
   .from("photos")
   .select("*")
   .eq("user_id", userId)
   .eq("is_favorite", true)
   .order("favorited_at", { ascending: false })
-\`\`\`
+```
 
 ### Get All Favorite Albums
 
-\`\`\`typescript
+```typescript
 const { data: favoriteAlbums } = await supabase
   .from("albums")
   .select("*")
   .eq("user_id", userId)
   .eq("is_favorite", true)
   .order("favorited_at", { ascending: false })
-\`\`\`
+```
 
 ### Get Favorite Counts
 
-\`\`\`typescript
+```typescript
 // Count favorite photos
 const { count: favoriteCount } = await supabase
   .from("photos")
   .select("*", { count: "exact", head: true })
   .eq("user_id", userId)
   .eq("is_favorite", true)
-\`\`\`
+```
 
 ---
 

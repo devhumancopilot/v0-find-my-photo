@@ -36,19 +36,6 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
 
-  // Reset stalled photos (stuck in 'processing' for more than 10 minutes)
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  await supabase
-    .from("photo_processing_queue")
-    .update({
-      status: "pending",
-      processing_started_at: null,
-      error_message: "Processing timed out - reset to pending"
-    })
-    .eq("user_id", user.id)
-    .eq("status", "processing")
-    .lt("processing_started_at", tenMinutesAgo)
-
   // Check for pending photos in processing queue
   const { count: pendingQueueCount } = await supabase
     .from("photo_processing_queue")
