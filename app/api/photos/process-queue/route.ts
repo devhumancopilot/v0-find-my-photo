@@ -76,7 +76,10 @@ export async function POST(request: NextRequest) {
 
     // Start processing in the background
     // Note: In production, you might want to use a job queue system like BullMQ or trigger this via cron
-    processQueueInBackground(userId, queueItems, serviceSupabase)
+    processQueueInBackground(userId, queueItems, serviceSupabase).catch((error) => {
+      console.error('[Process Queue] CRITICAL: Background processing failed completely:', error)
+      // In production, you might want to add alerting here (email, Sentry, etc.)
+    })
 
     return NextResponse.json({
       success: true,
@@ -114,6 +117,8 @@ async function processQueueInBackground(
   let failedCount = 0
 
   for (const queueItem of queueItems) {
+    console.log(`[Process Queue BG] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
+    console.log(`[Process Queue BG] Starting item ${processedCount + failedCount + 1}/${queueItems.length} - Queue ID: ${queueItem.id}`)
     try {
       // Mark as processing
       await supabase
@@ -142,18 +147,25 @@ async function processQueueInBackground(
 
       console.log(`[Process Queue BG][${embeddingConfig.provider.toUpperCase()}][${processedCount + 1}/${queueItems.length}] Processing photo ${photo.id}: ${photo.name}`)
 
-      // Fetch image from storage
-      const imageResponse = await fetch(photo.file_url)
+      // Fetch image from storage with timeout
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] 📥 Fetching image from storage: ${photo.file_url}`)
+      const imageResponse = await fetch(photo.file_url, {
+        signal: AbortSignal.timeout(30000) // 30 second timeout
+      })
       if (!imageResponse.ok) {
         throw new Error(`Failed to fetch image from storage: ${imageResponse.statusText}`)
       }
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] ✓ Image fetched successfully`)
 
       const imageBuffer = await imageResponse.arrayBuffer()
       const base64Data = Buffer.from(imageBuffer).toString('base64')
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] ✓ Image converted to base64 (${Math.round(base64Data.length / 1024)}KB)`)
 
       // Step 1: Generate caption using OpenAI (always, regardless of provider)
-      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] 📝 Step 1: Generating caption with OpenAI GPT-4 Vision`)
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] 📝 Step 1: Generating caption with OpenAI GPT-4 Vision...`)
+      const captionStartTime = Date.now()
       const caption = await generateImageCaption(base64Data, photo.type)
+      console.log(`[Process Queue BG][${processedCount + 1}/${queueItems.length}] ✓ Caption generated in ${Date.now() - captionStartTime}ms`)
 
       if (!caption) {
         throw new Error("Failed to generate caption")
@@ -167,16 +179,19 @@ async function processQueueInBackground(
 
       if (embeddingConfig.supportsMultimodal) {
         // CLIP provider - generate BOTH embeddings using CLIP (same 512D space!)
-        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] 🎨 Generating pure CLIP embeddings`)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] 🎨 Step 2a: Generating CLIP text embedding from caption...`)
 
         // CLIP text embedding from caption (512D) - in same space as image!
         const { generateCLIPTextEmbedding } = await import("@/lib/services/huggingface")
+        const textEmbedStartTime = Date.now()
         openaiEmbedding = await generateCLIPTextEmbedding(caption)
-        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP text embedding (caption): ${openaiEmbedding.length}D`)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP text embedding generated: ${openaiEmbedding.length}D in ${Date.now() - textEmbedStartTime}ms`)
 
         // CLIP direct image embedding (512D) - same space!
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] 🎨 Step 2b: Generating CLIP image embedding from image...`)
+        const imageEmbedStartTime = Date.now()
         clipEmbedding = await generateImageEmbedding(base64Data, photo.type)
-        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP image embedding: ${clipEmbedding.length}D`)
+        console.log(`[Process Queue BG][CLIP][${processedCount + 1}/${queueItems.length}] ✓ CLIP image embedding generated: ${clipEmbedding.length}D in ${Date.now() - imageEmbedStartTime}ms`)
       } else {
         // OpenAI provider - caption-based approach
         console.log(`[Process Queue BG][OPENAI][${processedCount + 1}/${queueItems.length}] 📝 Generating OpenAI text embedding from caption`)
