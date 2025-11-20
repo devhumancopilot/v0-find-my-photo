@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Sparkles, Upload, X, ImageIcon, Check, ArrowLeft, Image as ImageIconLucide, CheckCircle } from "lucide-react"
 import { GooglePhotosPicker } from "@/components/google-photos-picker"
 import { toast } from "sonner"
+import { uploadPhotosWithVercelBlob, uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
 
 interface UploadedImage {
   id: string
@@ -223,87 +224,55 @@ export default function UploadPhotosPage() {
     setTotalPhotosToUpload(totalPhotos)
 
     try {
-      const BATCH_SIZE = 10 // Upload 10 photos per request
-      let totalUploaded = 0
-      let totalFailed = 0
-      const allPhotosToUpload = [...uploadedImages, ...googlePhotos]
+      // Check if Vercel Blob is enabled
+      const useVercelBlob = process.env.NEXT_PUBLIC_ENABLE_VERCEL_BLOB === 'true'
 
-      console.log(`Starting batch upload: ${allPhotosToUpload.length} photos in batches of ${BATCH_SIZE}`)
+      let result;
 
-      // Upload in batches
-      for (let i = 0; i < allPhotosToUpload.length; i += BATCH_SIZE) {
-        const batch = allPhotosToUpload.slice(i, i + BATCH_SIZE)
-        const batchNumber = Math.floor(i / BATCH_SIZE) + 1
-        const totalBatches = Math.ceil(allPhotosToUpload.length / BATCH_SIZE)
+      if (useVercelBlob) {
+        // Use Vercel Blob for client-side uploads (bypasses 4MB limit)
+        console.log('[Upload] Using Vercel Blob for uploads')
 
-        console.log(`Uploading batch ${batchNumber}/${totalBatches} (${batch.length} photos)`)
+        // Vercel Blob only supports File objects, not Google Photos
+        // For Google Photos, we still need to fetch them first
+        const allFiles: File[] = uploadedImages.map(img => img.file)
 
-        const formData = new FormData()
-
-        // Add device photos to FormData with progress updates
-        for (let j = 0; j < batch.length; j++) {
-          const item = batch[j]
-          const currentPhotoIndex = i + j + 1
-
-          // Update progress per photo (0-90% for preparation)
-          setCurrentUploadingPhoto(currentPhotoIndex)
-          const prepProgress = ((currentPhotoIndex - 0.5) / allPhotosToUpload.length) * 90
-          setUploadProgress(Math.min(prepProgress, 90))
-
-          if ('file' in item) {
-            // Manual upload
-            formData.append('photos', item.file)
-          } else {
-            // Google Photos - need to fetch and add as Blob
-            try {
-              const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(item.baseUrl)}&size=d`
-              const imageResponse = await fetch(proxyUrl)
-
-              if (!imageResponse.ok) {
-                console.error(`Failed to fetch Google Photo ${item.id}`)
-                totalFailed++
-                continue
-              }
-
+        // Fetch Google Photos and convert to Files
+        for (const photo of googlePhotos) {
+          try {
+            const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`
+            const imageResponse = await fetch(proxyUrl)
+            if (imageResponse.ok) {
               const blob = await imageResponse.blob()
-              const filename = item.filename || `google-photo-${item.id}.jpg`
-              formData.append('photos', blob, filename)
-            } catch (error) {
-              console.error(`Error fetching Google Photo ${item.id}:`, error)
-              totalFailed++
-              continue
+              const filename = photo.filename || `google-photo-${photo.id}.jpg`
+              const file = new File([blob], filename, { type: photo.mimeType || 'image/jpeg' })
+              allFiles.push(file)
             }
+          } catch (error) {
+            console.error(`Failed to fetch Google Photo ${photo.id}:`, error)
           }
         }
 
-        // Upload batch to new API endpoint
-        try {
-          const response = await fetch('/api/photos/upload', {
-            method: 'POST',
-            body: formData,
-          })
-
-          if (!response.ok) {
-            const errorText = await response.text()
-            console.error(`Batch ${batchNumber} upload failed:`, response.status, errorText)
-            totalFailed += batch.length
-            throw new Error(`Batch upload failed: ${errorText}`)
+        result = await uploadPhotosWithVercelBlob(
+          allFiles,
+          (current, total, progress) => {
+            setCurrentUploadingPhoto(current)
+            setUploadProgress(progress)
           }
+        )
+      } else {
+        // Use traditional FormData upload (Supabase Storage)
+        console.log('[Upload] Using FormData upload (Supabase Storage)')
 
-          const result = await response.json()
-          const batchUploadedCount = result.uploaded_count || 0
-          totalUploaded += batchUploadedCount
-
-          // Update progress per photo actually uploaded (90-98% for upload completion)
-          const uploadProgress = 90 + ((totalUploaded / allPhotosToUpload.length) * 8)
-          setUploadProgress(Math.min(uploadProgress, 98))
-          setCurrentUploadingPhoto(totalUploaded)
-
-          console.log(`Batch ${batchNumber} uploaded successfully:`, result)
-        } catch (error) {
-          console.error(`Batch ${batchNumber} error:`, error)
-          // Continue with next batch even if this one fails
-        }
+        const files = uploadedImages.map(img => img.file)
+        result = await uploadPhotosWithFormData(
+          files,
+          googlePhotos,
+          (current, total, progress) => {
+            setCurrentUploadingPhoto(current)
+            setUploadProgress(progress)
+          }
+        )
       }
 
       // Clean up object URLs
@@ -316,17 +285,27 @@ export default function UploadPhotosPage() {
 
       // Complete!
       setUploadProgress(100)
-      setUploadedPhotoCount(totalUploaded)
+      setUploadedPhotoCount(result.uploaded_count)
 
-      if (totalUploaded > 0) {
+      if (result.uploaded_count > 0) {
         // Show queue notification instead of redirect
         setShowQueueNotification(true)
         setIsUploading(false)
 
+        const storageMethod = useVercelBlob ? 'Vercel Blob' : 'Supabase Storage'
         toast.success("Upload Complete!", {
-          description: `Successfully uploaded ${totalUploaded} photo${totalUploaded !== 1 ? "s" : ""}. They are ready for processing.`,
+          description: `Successfully uploaded ${result.uploaded_count} photo${result.uploaded_count !== 1 ? "s" : ""} via ${storageMethod}. They are ready for processing.`,
           duration: 5000,
         })
+
+        // Show errors if any
+        if (result.errors && result.errors.length > 0) {
+          console.error('[Upload] Errors:', result.errors)
+          toast.warning("Some uploads failed", {
+            description: `${result.failed_count} photo${result.failed_count !== 1 ? "s" : ""} failed to upload. Check console for details.`,
+            duration: 5000,
+          })
+        }
       } else {
         throw new Error("No photos were uploaded successfully")
       }

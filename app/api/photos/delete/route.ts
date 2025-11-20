@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { del } from '@vercel/blob'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -38,7 +39,7 @@ export async function DELETE(request: NextRequest) {
     // SECURITY CHECK: Verify the photo belongs to the user
     const { data: photo, error: fetchError } = await supabase
       .from("photos")
-      .select("id, user_id, name")
+      .select("id, user_id, name, file_url")
       .eq("id", photoId)
       .single()
 
@@ -58,6 +59,39 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Delete from storage (Vercel Blob or Supabase Storage)
+    if (photo.file_url) {
+      try {
+        if (photo.file_url.includes('vercel-storage.com') || photo.file_url.includes('blob.vercel-storage.com')) {
+          // Delete from Vercel Blob
+          console.log(`[Delete Photo] Deleting from Vercel Blob: ${photo.file_url}`)
+          await del(photo.file_url)
+          console.log(`[Delete Photo] ✓ Deleted from Vercel Blob`)
+        } else if (photo.file_url.includes('supabase.co/storage')) {
+          // Delete from Supabase Storage
+          console.log(`[Delete Photo] Deleting from Supabase Storage: ${photo.file_url}`)
+          // Extract the file path from the URL
+          // Format: https://{project}.supabase.co/storage/v1/object/public/photos/{userId}/{filename}
+          const urlParts = photo.file_url.split('/storage/v1/object/public/photos/')
+          if (urlParts.length > 1) {
+            const filePath = urlParts[1]
+            const { error: storageError } = await supabase.storage
+              .from('photos')
+              .remove([filePath])
+
+            if (storageError) {
+              console.error(`[Delete Photo] Failed to delete from Supabase Storage:`, storageError)
+            } else {
+              console.log(`[Delete Photo] ✓ Deleted from Supabase Storage`)
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[Delete Photo] Storage deletion error:`, error)
+        // Continue with database deletion even if storage deletion fails
+      }
+    }
+
     // Delete the photo from the database
     const { error: deleteError } = await supabase
       .from("photos")
@@ -73,7 +107,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    console.log(`[Delete Photo] ✓ Successfully deleted photo ${photoId} (${photo.name})`)
+    console.log(`[Delete Photo] ✓ Successfully deleted photo ${photoId} (${photo.name}) from database`)
 
     return NextResponse.json({
       success: true,
