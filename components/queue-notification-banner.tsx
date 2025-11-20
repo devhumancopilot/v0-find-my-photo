@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Sparkles, X } from "lucide-react"
@@ -18,6 +18,7 @@ const MAX_TOTAL_BATCHES = 50 // Safety limit: stop after 50 batches (handles up 
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 const MAX_RETRY_DELAY = 10000 // 10 seconds max
 const REQUEST_TIMEOUT = 290000 // 290 seconds (slightly less than Vercel's 300s to allow cleanup)
+const POLL_INTERVAL = 3000 // Poll every 3 seconds for queue status updates
 
 export function QueueNotificationBanner({ pendingCount, processingCount }: QueueNotificationBannerProps) {
   const [isProcessing, setIsProcessing] = useState(false)
@@ -25,11 +26,70 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
   const [totalProcessed, setTotalProcessed] = useState(0)
   const [batchCount, setBatchCount] = useState(0)
   const [consecutiveFailures, setConsecutiveFailures] = useState(0)
+
+  // Real-time queue counts (updated via polling)
+  const [currentPendingCount, setCurrentPendingCount] = useState(pendingCount)
+  const [currentProcessingCount, setCurrentProcessingCount] = useState(processingCount)
+
   const router = useRouter()
   const abortControllerRef = useRef<AbortController | null>(null)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Update current counts when props change
+  useEffect(() => {
+    setCurrentPendingCount(pendingCount)
+    setCurrentProcessingCount(processingCount)
+  }, [pendingCount, processingCount])
+
+  // Fetch current queue status from API
+  const fetchQueueStatus = async () => {
+    try {
+      const response = await fetch('/api/photos/queue-status')
+      if (!response.ok) {
+        console.error('[Queue Banner] Failed to fetch queue status:', response.statusText)
+        return
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        setCurrentPendingCount(data.pending_count)
+        setCurrentProcessingCount(data.processing_count)
+        console.log(`[Queue Banner] Status updated: ${data.pending_count} pending, ${data.processing_count} processing`)
+      }
+    } catch (error) {
+      console.error('[Queue Banner] Error fetching queue status:', error)
+    }
+  }
+
+  // Start/stop polling based on processing state
+  useEffect(() => {
+    // Start polling when processing begins
+    if (isProcessing) {
+      console.log('[Queue Banner] Starting status polling...')
+      pollIntervalRef.current = setInterval(fetchQueueStatus, POLL_INTERVAL)
+
+      // Initial fetch
+      fetchQueueStatus()
+    } else {
+      // Stop polling when processing ends
+      if (pollIntervalRef.current) {
+        console.log('[Queue Banner] Stopping status polling')
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+  }, [isProcessing])
 
   // Don't show if no pending items or already dismissed
-  if ((pendingCount === 0 && processingCount === 0) || isDismissed) {
+  if ((currentPendingCount === 0 && currentProcessingCount === 0) || isDismissed) {
     return null
   }
 
@@ -186,6 +246,22 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
   }
 
   const handleProcessNow = async () => {
+    // Redirect to dashboard if not already there
+    const currentPath = window.location.pathname
+    if (currentPath !== '/dashboard') {
+      toast.info("Redirecting to Dashboard", {
+        description: "Starting photo processing. Redirecting to dashboard to track progress...",
+        duration: 2000,
+      })
+
+      // Redirect with autostart parameter
+      setTimeout(() => {
+        router.push('/dashboard?autostart=true')
+      }, 500)
+
+      return
+    }
+
     setIsProcessing(true)
     setTotalProcessed(0)
     setBatchCount(0)
@@ -198,6 +274,33 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
 
     await processQueue(false, 0)
   }
+
+  // Auto-start processing if redirected with autostart parameter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const shouldAutostart = urlParams.get('autostart') === 'true'
+
+    if (shouldAutostart && !isProcessing && currentPendingCount > 0) {
+      // Clean up URL
+      window.history.replaceState({}, '', '/dashboard')
+
+      // Start processing after a short delay to ensure component is fully mounted
+      setTimeout(() => {
+        setIsProcessing(true)
+        setTotalProcessed(0)
+        setBatchCount(0)
+        setConsecutiveFailures(0)
+
+        toast.info("Processing Started", {
+          description: "Processing photos in batches. This will continue automatically until all photos are processed. You can cancel anytime.",
+          duration: 3000,
+        })
+
+        processQueue(false, 0)
+      }, 100)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   const handleCancelProcessing = () => {
     if (abortControllerRef.current) {
@@ -225,7 +328,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
                 <p className="font-semibold text-blue-900 mb-1">
                   {isProcessing ? (
                     <>Processing Photos (Batch {batchCount})...</>
-                  ) : processingCount > 0 ? (
+                  ) : currentProcessingCount > 0 ? (
                     <>Processing Photos...</>
                   ) : (
                     <>Photos Ready for Processing</>
@@ -236,18 +339,19 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
                     {isProcessing && (
                       <>
                         Processed {totalProcessed} photo{totalProcessed !== 1 ? "s" : ""} so far.
-                        Processing continues automatically in batches.
+                        {currentPendingCount > 0 && ` ${currentPendingCount} remaining in queue.`}
+                        {" "}Processing continues automatically in batches.
                       </>
                     )}
-                    {!isProcessing && processingCount > 0 && (
+                    {!isProcessing && currentProcessingCount > 0 && (
                       <>
-                        {processingCount} photo{processingCount !== 1 ? "s are" : " is"} currently being processed.
-                        {pendingCount > 0 && ` ${pendingCount} more waiting in queue.`}
+                        {currentProcessingCount} photo{currentProcessingCount !== 1 ? "s are" : " is"} currently being processed.
+                        {currentPendingCount > 0 && ` ${currentPendingCount} more waiting in queue.`}
                       </>
                     )}
-                    {!isProcessing && processingCount === 0 && pendingCount > 0 && (
+                    {!isProcessing && currentProcessingCount === 0 && currentPendingCount > 0 && (
                       <>
-                        You have {pendingCount} photo{pendingCount !== 1 ? "s" : ""} waiting for AI processing
+                        You have {currentPendingCount} photo{currentPendingCount !== 1 ? "s" : ""} waiting for AI processing
                         (captions, embeddings, face detection).
                       </>
                     )}
@@ -283,7 +387,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
             >
               Cancel
             </Button>
-          ) : pendingCount > 0 && processingCount === 0 && (
+          ) : currentPendingCount > 0 && currentProcessingCount === 0 && (
             <Button
               onClick={handleProcessNow}
               disabled={isProcessing}
