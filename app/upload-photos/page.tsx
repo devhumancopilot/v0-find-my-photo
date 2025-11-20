@@ -11,6 +11,7 @@ import { Sparkles, Upload, X, ImageIcon, Check, ArrowLeft, Image as ImageIconLuc
 import { GooglePhotosPicker } from "@/components/google-photos-picker"
 import { toast } from "sonner"
 import { uploadPhotosWithVercelBlob, uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
+import { ChunkedUploader } from "@/components/chunked-uploader"
 
 interface UploadedImage {
   id: string
@@ -42,6 +43,8 @@ export default function UploadPhotosPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentUploadingPhoto, setCurrentUploadingPhoto] = useState(0)
   const [totalPhotosToUpload, setTotalPhotosToUpload] = useState(0)
+  const [useChunkedUpload, setUseChunkedUpload] = useState(false)
+  const [chunkedUploadFiles, setChunkedUploadFiles] = useState<File[]>([])
 
   // Check for OAuth callback success
   useEffect(() => {
@@ -218,40 +221,55 @@ export default function UploadPhotosPage() {
   const handleUpload = async () => {
     if (totalPhotos === 0) return
 
+    // Check if Vercel Blob is enabled
+    const useVercelBlob = process.env.NEXT_PUBLIC_ENABLE_VERCEL_BLOB === 'true'
+
+    // Prepare all files
+    const allFiles: File[] = uploadedImages.map(img => img.file)
+
+    // Fetch Google Photos and convert to Files if using Vercel Blob
+    if (useVercelBlob && googlePhotos.length > 0) {
+      toast.info("Preparing Google Photos...", { duration: 2000 })
+      for (const photo of googlePhotos) {
+        try {
+          const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`
+          const imageResponse = await fetch(proxyUrl)
+          if (imageResponse.ok) {
+            const blob = await imageResponse.blob()
+            const filename = photo.filename || `google-photo-${photo.id}.jpg`
+            const file = new File([blob], filename, { type: photo.mimeType || 'image/jpeg' })
+            allFiles.push(file)
+          }
+        } catch (error) {
+          console.error(`Failed to fetch Google Photo ${photo.id}:`, error)
+        }
+      }
+    }
+
+    // For large batches with Vercel Blob, use ChunkedUploader component
+    if (useVercelBlob && allFiles.length > 50) {
+      console.log('[Upload] Large batch detected, using ChunkedUploader')
+      setChunkedUploadFiles(allFiles)
+      setUseChunkedUpload(true)
+      toast.info("Large Upload Detected", {
+        description: `Uploading ${allFiles.length} photos with advanced chunked upload system.`,
+        duration: 3000,
+      })
+      return
+    }
+
+    // For smaller batches, use the regular upload flow
     setIsUploading(true)
     setUploadProgress(0)
     setCurrentUploadingPhoto(0)
     setTotalPhotosToUpload(totalPhotos)
 
     try {
-      // Check if Vercel Blob is enabled
-      const useVercelBlob = process.env.NEXT_PUBLIC_ENABLE_VERCEL_BLOB === 'true'
-
       let result;
 
       if (useVercelBlob) {
         // Use Vercel Blob for client-side uploads (bypasses 4MB limit)
         console.log('[Upload] Using Vercel Blob for uploads')
-
-        // Vercel Blob only supports File objects, not Google Photos
-        // For Google Photos, we still need to fetch them first
-        const allFiles: File[] = uploadedImages.map(img => img.file)
-
-        // Fetch Google Photos and convert to Files
-        for (const photo of googlePhotos) {
-          try {
-            const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`
-            const imageResponse = await fetch(proxyUrl)
-            if (imageResponse.ok) {
-              const blob = await imageResponse.blob()
-              const filename = photo.filename || `google-photo-${photo.id}.jpg`
-              const file = new File([blob], filename, { type: photo.mimeType || 'image/jpeg' })
-              allFiles.push(file)
-            }
-          } catch (error) {
-            console.error(`Failed to fetch Google Photo ${photo.id}:`, error)
-          }
-        }
 
         result = await uploadPhotosWithVercelBlob(
           allFiles,
@@ -320,6 +338,44 @@ export default function UploadPhotosPage() {
       setCurrentUploadingPhoto(0)
       setTotalPhotosToUpload(0)
     }
+  }
+
+  const handleChunkedUploadComplete = (uploaded: number, failed: number) => {
+    console.log(`[Chunked Upload] Complete: ${uploaded} uploaded, ${failed} failed`)
+
+    // Clean up object URLs
+    uploadedImages.forEach((image) => {
+      URL.revokeObjectURL(image.preview)
+    })
+
+    // Clear session storage
+    sessionStorage.removeItem('pendingUploadCount')
+
+    setUploadedPhotoCount(uploaded)
+    setUseChunkedUpload(false)
+    setChunkedUploadFiles([])
+
+    if (uploaded > 0) {
+      setShowQueueNotification(true)
+
+      toast.success("Upload Complete!", {
+        description: `Successfully uploaded ${uploaded} photo${uploaded !== 1 ? "s" : ""}. They are ready for processing.`,
+        duration: 5000,
+      })
+
+      if (failed > 0) {
+        toast.warning("Some uploads failed", {
+          description: `${failed} photo${failed !== 1 ? "s" : ""} failed to upload.`,
+          duration: 5000,
+        })
+      }
+    }
+  }
+
+  const handleChunkedUploadCancel = () => {
+    setUseChunkedUpload(false)
+    setChunkedUploadFiles([])
+    toast.info("Upload cancelled")
   }
 
   const handleProcessQueue = async () => {
@@ -610,8 +666,17 @@ export default function UploadPhotosPage() {
               </Card>
             )}
 
+            {/* Chunked Upload Progress */}
+            {useChunkedUpload && chunkedUploadFiles.length > 0 && (
+              <ChunkedUploader
+                files={chunkedUploadFiles}
+                onComplete={handleChunkedUploadComplete}
+                onCancel={handleChunkedUploadCancel}
+              />
+            )}
+
             {/* Upload Progress */}
-            {isUploading && (
+            {isUploading && !useChunkedUpload && (
               <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
                 <CardContent className="pt-6">
                   <div className="space-y-4">

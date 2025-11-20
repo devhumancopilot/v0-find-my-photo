@@ -1,4 +1,4 @@
-import { upload } from '@vercel/blob/client';
+import { uploadAllChunks } from './chunked-upload-handler';
 
 export interface UploadResult {
   success: boolean;
@@ -6,108 +6,75 @@ export interface UploadResult {
   failed_count: number;
   photos?: Array<{ id: number; name: string; url: string }>;
   errors?: string[];
+  useChunkedUpload?: boolean;
 }
 
 /**
- * Upload photos using Vercel Blob (client-side upload)
- * This bypasses the 4MB serverless function payload limit
+ * Upload photos using Vercel Blob with chunked uploads and retry support
+ * This bypasses the 4MB serverless function payload limit and handles large batches (500+ photos)
  */
 export async function uploadPhotosWithVercelBlob(
   files: File[],
   onProgress?: (current: number, total: number, progress: number) => void
 ): Promise<UploadResult> {
-  console.log(`[Vercel Blob] Starting upload of ${files.length} files`);
+  console.log(`[Vercel Blob] Starting chunked upload of ${files.length} files`);
 
-  const uploadedPhotos: Array<{ name: string; url: string; size: number; type: string }> = [];
-  const errors: string[] = [];
-
-  // Upload files to Vercel Blob
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const currentIndex = i + 1;
-
-    try {
-      console.log(`[Vercel Blob] Uploading ${currentIndex}/${files.length}: ${file.name}`);
-
-      // Update progress (0-90% for upload)
-      const progress = (currentIndex / files.length) * 90;
-      onProgress?.(currentIndex, files.length, progress);
-
-      // Upload to Vercel Blob with client-side upload
-      const blob = await upload(file.name, file, {
-        access: 'public',
-        handleUploadUrl: '/api/upload/token',
-        clientPayload: JSON.stringify({
-          filename: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-        }),
-      });
-
-      console.log(`[Vercel Blob] Uploaded successfully: ${blob.url}`);
-
-      uploadedPhotos.push({
-        name: file.name,
-        url: blob.url,
-        size: file.size,
-        type: file.type,
-      });
-    } catch (error) {
-      console.error(`[Vercel Blob] Failed to upload ${file.name}:`, error);
-      errors.push(`${file.name}: ${error instanceof Error ? error.message : 'Upload failed'}`);
-    }
+  // For large uploads (>50 photos), recommend using the ChunkedUploader component
+  if (files.length > 50) {
+    console.warn('[Vercel Blob] Large upload detected. Consider using ChunkedUploader component for better reliability.');
+    return {
+      success: false,
+      uploaded_count: 0,
+      failed_count: 0,
+      useChunkedUpload: true,
+      errors: ['Please use the chunked uploader for large batches (>50 photos)'],
+    };
   }
 
-  // Save blob URLs to database
-  if (uploadedPhotos.length > 0) {
-    try {
-      console.log(`[Vercel Blob] Saving ${uploadedPhotos.length} photos to database`);
+  // For smaller uploads, use the simple upload
+  const chunkSize = 15;
 
-      // Update progress (90-100% for saving)
-      onProgress?.(uploadedPhotos.length, files.length, 95);
+  try {
+    const { totalUploaded, totalFailed } = await uploadAllChunks(
+      files,
+      chunkSize,
+      (chunkIndex, result) => {
+        // Calculate overall progress
+        const completedChunks = chunkIndex + 1;
+        const totalChunks = Math.ceil(files.length / chunkSize);
+        const progress = (completedChunks / totalChunks) * 100;
 
-      const response = await fetch('/api/photos/save-blob', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photos: uploadedPhotos }),
-      });
+        onProgress?.(
+          result.blobUrls.length * (chunkIndex + 1),
+          files.length,
+          progress
+        );
+      },
+      {
+        onChunkProgress: (chunkIndex, photoIndex, totalInChunk) => {
+          const chunkStart = chunkIndex * chunkSize;
+          const currentPhoto = chunkStart + photoIndex;
+          const progress = (currentPhoto / files.length) * 100;
 
-      if (!response.ok) {
-        throw new Error(`Failed to save photos: ${response.statusText}`);
+          onProgress?.(currentPhoto, files.length, progress);
+        },
       }
+    );
 
-      const result = await response.json();
-      console.log('[Vercel Blob] Database save result:', result);
-
-      onProgress?.(files.length, files.length, 100);
-
-      return {
-        success: true,
-        uploaded_count: result.uploaded_count || 0,
-        failed_count: errors.length + (result.failed_count || 0),
-        photos: result.photos,
-        errors: [...errors, ...(result.errors || [])],
-      };
-    } catch (error) {
-      console.error('[Vercel Blob] Failed to save to database:', error);
-      return {
-        success: false,
-        uploaded_count: 0,
-        failed_count: uploadedPhotos.length,
-        errors: [
-          ...errors,
-          `Database error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        ],
-      };
-    }
+    return {
+      success: totalUploaded > 0,
+      uploaded_count: totalUploaded,
+      failed_count: totalFailed,
+    };
+  } catch (error) {
+    console.error('[Vercel Blob] Upload error:', error);
+    return {
+      success: false,
+      uploaded_count: 0,
+      failed_count: files.length,
+      errors: [error instanceof Error ? error.message : 'Upload failed'],
+    };
   }
-
-  return {
-    success: false,
-    uploaded_count: 0,
-    failed_count: errors.length,
-    errors,
-  };
 }
 
 /**

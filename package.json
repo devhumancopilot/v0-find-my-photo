@@ -39,6 +39,7 @@
     "@radix-ui/react-tooltip": "1.1.6",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "@types/uuid": "^10.0.0",
     "@vercel/analytics": "latest",
     "@vercel/blob": "^2.0.0",
     "@vladmandic/face-api": "latest",
@@ -67,6 +68,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "util": "latest",
+    "uuid": "^13.0.0",
     "vaul": "^1.1.2",
     "ws": "latest",
     "zod": "3.25.76"
