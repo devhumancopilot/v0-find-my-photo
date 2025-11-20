@@ -82,12 +82,26 @@ export async function POST(request: NextRequest) {
     // The execution context is killed after response is sent, stopping all background work
     const results = await processQueueInBackground(userId, queueItems, serviceSupabase)
 
+    // Check if there are more pending items after this batch
+    const { data: remainingItems, error: remainingError } = await serviceSupabase
+      .from('photo_processing_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+
+    const remainingCount = remainingError ? 0 : (remainingItems || 0)
+    const hasMore = remainingCount > 0
+
+    console.log(`[Process Queue] Batch complete. Remaining: ${remainingCount}, Has More: ${hasMore}`)
+
     return NextResponse.json({
       success: true,
       message: 'Processing completed',
       queue_count: queueItems.length,
       processed_count: results.processedCount,
       failed_count: results.failedCount,
+      remaining_count: remainingCount,
+      has_more: hasMore,
     })
   } catch (error) {
     console.error('[Process Queue] Request error:', error)
