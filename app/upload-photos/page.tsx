@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Sparkles, Upload, X, ImageIcon, Check, ArrowLeft, Image as ImageIconLucide, CheckCircle } from "lucide-react"
 import { GooglePhotosPicker } from "@/components/google-photos-picker"
 import { toast } from "sonner"
-import { uploadPhotosWithVercelBlob, uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
+import { uploadPhotosWithSupabaseChunked, uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
 import { ChunkedUploader } from "@/components/chunked-uploader"
 
 interface UploadedImage {
@@ -221,14 +221,11 @@ export default function UploadPhotosPage() {
   const handleUpload = async () => {
     if (totalPhotos === 0) return
 
-    // Check if Vercel Blob is enabled
-    const useVercelBlob = process.env.NEXT_PUBLIC_ENABLE_VERCEL_BLOB === 'true'
-
     // Prepare all files
     const allFiles: File[] = uploadedImages.map(img => img.file)
 
-    // Fetch Google Photos and convert to Files if using Vercel Blob
-    if (useVercelBlob && googlePhotos.length > 0) {
+    // Fetch Google Photos and convert to Files for chunked upload
+    if (googlePhotos.length > 0) {
       toast.info("Preparing Google Photos...", { duration: 2000 })
       for (const photo of googlePhotos) {
         try {
@@ -246,13 +243,13 @@ export default function UploadPhotosPage() {
       }
     }
 
-    // For large batches with Vercel Blob, use ChunkedUploader component
-    if (useVercelBlob && allFiles.length > 50) {
-      console.log('[Upload] Large batch detected, using ChunkedUploader')
+    // For large batches (>50 photos), use ChunkedUploader component with Supabase direct upload
+    if (allFiles.length > 50) {
+      console.log('[Upload] Large batch detected, using ChunkedUploader with Supabase Storage')
       setChunkedUploadFiles(allFiles)
       setUseChunkedUpload(true)
       toast.info("Large Upload Detected", {
-        description: `Uploading ${allFiles.length} photos with advanced chunked upload system.`,
+        description: `Uploading ${allFiles.length} photos with advanced chunked upload system (direct to Supabase Storage).`,
         duration: 3000,
       })
       return
@@ -267,31 +264,16 @@ export default function UploadPhotosPage() {
     try {
       let result;
 
-      if (useVercelBlob) {
-        // Use Vercel Blob for client-side uploads (bypasses 4MB limit)
-        console.log('[Upload] Using Vercel Blob for uploads')
+      // Use Supabase chunked upload for client-side uploads (bypasses timeout limit)
+      console.log('[Upload] Using Supabase chunked upload (client-side direct upload)')
 
-        result = await uploadPhotosWithVercelBlob(
-          allFiles,
-          (current, total, progress) => {
-            setCurrentUploadingPhoto(current)
-            setUploadProgress(progress)
-          }
-        )
-      } else {
-        // Use traditional FormData upload (Supabase Storage)
-        console.log('[Upload] Using FormData upload (Supabase Storage)')
-
-        const files = uploadedImages.map(img => img.file)
-        result = await uploadPhotosWithFormData(
-          files,
-          googlePhotos,
-          (current, total, progress) => {
-            setCurrentUploadingPhoto(current)
-            setUploadProgress(progress)
-          }
-        )
-      }
+      result = await uploadPhotosWithSupabaseChunked(
+        allFiles,
+        (current, total, progress) => {
+          setCurrentUploadingPhoto(current)
+          setUploadProgress(progress)
+        }
+      )
 
       // Clean up object URLs
       uploadedImages.forEach((image) => {
@@ -310,9 +292,8 @@ export default function UploadPhotosPage() {
         setShowQueueNotification(true)
         setIsUploading(false)
 
-        const storageMethod = useVercelBlob ? 'Vercel Blob' : 'Supabase Storage'
         toast.success("Upload Complete!", {
-          description: `Successfully uploaded ${result.uploaded_count} photo${result.uploaded_count !== 1 ? "s" : ""} via ${storageMethod}. They are ready for processing.`,
+          description: `Successfully uploaded ${result.uploaded_count} photo${result.uploaded_count !== 1 ? "s" : ""} to Supabase Storage. They are ready for processing.`,
           duration: 5000,
         })
 

@@ -1,4 +1,4 @@
-import { uploadAllChunks } from './chunked-upload-handler';
+import { uploadAllChunksToSupabase } from './supabase-chunked-upload';
 
 export interface UploadResult {
   success: boolean;
@@ -10,18 +10,18 @@ export interface UploadResult {
 }
 
 /**
- * Upload photos using Vercel Blob with chunked uploads and retry support
- * This bypasses the 4MB serverless function payload limit and handles large batches (500+ photos)
+ * Upload photos using Supabase Storage with chunked uploads and retry support
+ * This bypasses the serverless function and handles large batches (500+ photos)
  */
-export async function uploadPhotosWithVercelBlob(
+export async function uploadPhotosWithSupabaseChunked(
   files: File[],
   onProgress?: (current: number, total: number, progress: number) => void
 ): Promise<UploadResult> {
-  console.log(`[Vercel Blob] Starting chunked upload of ${files.length} files`);
+  console.log(`[Supabase Chunked] Starting chunked upload of ${files.length} files`);
 
   // For large uploads (>50 photos), recommend using the ChunkedUploader component
   if (files.length > 50) {
-    console.warn('[Vercel Blob] Large upload detected. Consider using ChunkedUploader component for better reliability.');
+    console.warn('[Supabase Chunked] Large upload detected. Using ChunkedUploader component for better reliability.');
     return {
       success: false,
       uploaded_count: 0,
@@ -35,7 +35,7 @@ export async function uploadPhotosWithVercelBlob(
   const chunkSize = 15;
 
   try {
-    const { totalUploaded, totalFailed } = await uploadAllChunks(
+    const { totalUploaded, totalFailed } = await uploadAllChunksToSupabase(
       files,
       chunkSize,
       (chunkIndex, result) => {
@@ -45,7 +45,7 @@ export async function uploadPhotosWithVercelBlob(
         const progress = (completedChunks / totalChunks) * 100;
 
         onProgress?.(
-          result.blobUrls.length * (chunkIndex + 1),
+          result.storageUrls.length * (chunkIndex + 1),
           files.length,
           progress
         );
@@ -67,7 +67,7 @@ export async function uploadPhotosWithVercelBlob(
       failed_count: totalFailed,
     };
   } catch (error) {
-    console.error('[Vercel Blob] Upload error:', error);
+    console.error('[Supabase Chunked] Upload error:', error);
     return {
       success: false,
       uploaded_count: 0,

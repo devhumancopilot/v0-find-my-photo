@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2, Pause, Play, RefreshCw } from 'lucide-react';
 import { useUploadSession } from '@/lib/hooks/useUploadSession';
-import { uploadPhotoChunk, type ChunkUploadResult } from '@/lib/utils/chunked-upload-handler';
+import { uploadPhotoChunkToSupabase, type ChunkUploadResult } from '@/lib/utils/supabase-chunked-upload';
 
 interface ChunkedUploaderProps {
   files: File[];
@@ -113,7 +113,7 @@ export function ChunkedUploader({ files, onComplete, onCancel }: ChunkedUploader
       });
 
       try {
-        const result: ChunkUploadResult = await uploadPhotoChunk(chunkFiles, i, {
+        const result: ChunkUploadResult = await uploadPhotoChunkToSupabase(chunkFiles, i, {
           onChunkProgress: (chunkIdx, photoIdx, totalInChunk) => {
             setCurrentPhotoInChunk(photoIdx);
           },
@@ -123,7 +123,7 @@ export function ChunkedUploader({ files, onComplete, onCancel }: ChunkedUploader
         updateChunkStatus(i, {
           status: result.success ? 'completed' : 'failed',
           photoIds: result.photoIds,
-          blobUrls: result.blobUrls,
+          blobUrls: result.storageUrls,
           dbPhotoIds: result.dbPhotoIds,
           error: result.errors.join(', ') || undefined,
           retryCount: result.retryCount,
