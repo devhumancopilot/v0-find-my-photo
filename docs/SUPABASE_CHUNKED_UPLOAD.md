@@ -11,20 +11,20 @@ Instead of using Vercel Blob, we upload directly to **your existing Supabase Sto
 ## How It Works
 
 ### Before (Timeout Issue):
-```
+\`\`\`
 Browser → FormData → [4MB LIMIT] → Serverless Function → Supabase Storage
                            ❌ TIMEOUT (after ~100 photos)
-```
+\`\`\`
 
 ### After (No Timeout):
-```
+\`\`\`
 Browser → [Direct Upload] → Supabase Storage ✅
          (Client-side SDK)    (No serverless function involved!)
-```
+\`\`\`
 
 ## Architecture
 
-```
+\`\`\`
 Upload 600 photos (8MB each):
 
 ├─ Chunk 1 (15 photos)
@@ -42,23 +42,23 @@ Upload 600 photos (8MB each):
 ... (continues for all 40 chunks)
 
 ✅ Result: All 600 photos uploaded without timeout!
-```
+\`\`\`
 
 ## Implementation Details
 
 ### 1. Storage Path Pattern (Same as Before)
 
 Your existing pattern is preserved:
-```typescript
+\`\`\`typescript
 const filePath = `${userId}/${timestamp}-${randomString}.${fileExt}`;
 // Example: "abc-123-def-456/1234567890-xyz789.jpg"
-```
+\`\`\`
 
 **Nothing changes** in your storage structure!
 
 ### 2. Client-Side Upload (New)
 
-```typescript
+\`\`\`typescript
 // Uploads directly from browser to Supabase Storage
 const { data, error } = await supabase.storage
   .from('photos')
@@ -71,11 +71,11 @@ const { data, error } = await supabase.storage
 const { data: urlData } = supabase.storage
   .from('photos')
   .getPublicUrl(filePath);
-```
+\`\`\`
 
 ### 3. Database Save (Same API Pattern)
 
-```typescript
+\`\`\`typescript
 // Save URLs to database via API
 POST /api/photos/save-storage
 {
@@ -85,7 +85,7 @@ POST /api/photos/save-storage
     ...
   ]
 }
-```
+\`\`\`
 
 **This creates the same database records as before:**
 - Photo record in `photos` table
@@ -164,20 +164,20 @@ POST /api/photos/save-storage
 ### Automatic Activation
 
 **For large batches (>50 photos):**
-```
+\`\`\`
 1. User selects 600 photos
 2. System detects large batch
 3. ChunkedUploader UI activates
 4. Progress shows: "Chunk 1/40... Chunk 2/40..."
 5. All photos upload successfully! ✅
-```
+\`\`\`
 
 **For small batches (≤50 photos):**
-```
+\`\`\`
 1. User selects 20 photos
 2. Simple chunked upload (hidden from user)
 3. Completes quickly
-```
+\`\`\`
 
 ### Manual Controls
 
@@ -208,7 +208,7 @@ POST /api/photos/save-storage
 
 ### Upload Flow
 
-```typescript
+\`\`\`typescript
 // 1. Initialize session
 const sessionId = initializeSession(files);
 
@@ -226,7 +226,7 @@ for (const chunk of chunks) {
 
 // 6. Complete
 completeSession();
-```
+\`\`\`
 
 ## Testing Your Scenario
 
@@ -274,11 +274,11 @@ completeSession();
 5. ✅ Path is generated (user can't specify arbitrary paths)
 
 **RLS Policy (Already in place):**
-```sql
+\`\`\`sql
 CREATE POLICY "Users can upload to their own folder"
   ON storage.objects FOR INSERT
   WITH CHECK (bucket_id = 'photos' AND (storage.foldername(name))[1] = auth.uid()::text);
-```
+\`\`\`
 
 This ensures users can only upload to `{their_user_id}/filename.jpg`
 
@@ -312,18 +312,18 @@ This ensures users can only upload to `{their_user_id}/filename.jpg`
 ## Environment Variables
 
 **Required (already set):**
-```env
+\`\`\`env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-```
+\`\`\`
 
 **Not needed:**
-```env
+\`\`\`env
 # These are NOT required for Supabase chunked upload:
 # BLOB_READ_WRITE_TOKEN (Vercel Blob - not used)
 # NEXT_PUBLIC_ENABLE_VERCEL_BLOB (Vercel Blob - not used)
-```
+\`\`\`
 
 ## Summary
 
