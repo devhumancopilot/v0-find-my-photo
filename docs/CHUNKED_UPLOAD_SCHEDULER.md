@@ -15,7 +15,7 @@ The scheduler system breaks large uploads into manageable chunks with automatic 
 
 ## Architecture Overview
 
-```
+\`\`\`
 ┌────────────────────────────────────────────────────────────┐
 │                    User Uploads 600 Photos                  │
 └───────────────────────────┬────────────────────────────────┘
@@ -45,7 +45,7 @@ The scheduler system breaks large uploads into manageable chunks with automatic 
          │                 │                  │
          ▼                 ▼                  ▼
        ✅ Done          ✅ Done            ✅ Done
-```
+\`\`\`
 
 ---
 
@@ -56,7 +56,7 @@ The scheduler system breaks large uploads into manageable chunks with automatic 
 **Purpose**: Track upload progress across page reloads and failures
 
 **State Structure**:
-```typescript
+\`\`\`typescript
 {
   sessionId: "uuid",
   totalPhotos: 600,
@@ -81,7 +81,7 @@ The scheduler system breaks large uploads into manageable chunks with automatic 
     // ... 38 more chunks
   ]
 }
-```
+\`\`\`
 
 **Features**:
 - ✅ localStorage persistence (survives page refresh)
@@ -98,13 +98,13 @@ The scheduler system breaks large uploads into manageable chunks with automatic 
 - Large enough to be efficient (40 chunks for 600 photos)
 
 **Retry Strategy**:
-```typescript
+\`\`\`typescript
 Attempt 1: Immediate
 Attempt 2: Wait 1s
 Attempt 3: Wait 3s
 Attempt 4: Wait 10s (final)
 Max retries: 3
-```
+\`\`\`
 
 **Error Categorization**:
 - **Network errors**: Retry immediately
@@ -126,7 +126,7 @@ Max retries: 3
 - ✅ Per-chunk status display (dev mode)
 
 **User Experience**:
-```
+\`\`\`
 Upload Progress
 Chunk 25 of 40 • 375 photos uploaded
 
@@ -137,7 +137,7 @@ Current Chunk (Photo 5 of 15): [███░░░░░░░░░░░░] 3
 Status: ⏫ Uploading...
 
 [⏸️ Pause]
-```
+\`\`\`
 
 ### 4. Session Recovery API (`/api/upload/session`)
 
@@ -156,24 +156,24 @@ Status: ⏫ Uploading...
 ## How It Solves the Timeout Problem
 
 ### Before (Fails at ~100 photos):
-```
+\`\`\`
 Upload 600 photos → Batch 1 (10) → Upload → Save DB ✅
                   → Batch 2 (10) → Upload → Save DB ✅
                   → ...
                   → Batch 10 (10) → Upload → Save DB ✅
                   → Batch 11 (10) → Upload → ⏱️ TIMEOUT ❌
                   → Remaining 500 photos never processed ❌
-```
+\`\`\`
 
 **Problem**: Cumulative time exceeds Vercel's 60s limit
 
 ### After (Handles 600+ photos):
-```
+\`\`\`
 Upload 600 photos → Chunk 1 (15) → Client Upload (3s) → Save DB (1s) ✅
                   → Chunk 2 (15) → Client Upload (3s) → Save DB (1s) ✅
                   → ...
                   → Chunk 40 (15) → Client Upload (3s) → Save DB (1s) ✅
-```
+\`\`\`
 
 **Why it works**:
 - ✅ Each API call is independent (~1-2s, well under 60s limit)
@@ -190,12 +190,12 @@ Upload 600 photos → Chunk 1 (15) → Client Upload (3s) → Save DB (1s) ✅
 
 When you upload **>50 photos** with Vercel Blob enabled, the system automatically uses chunked upload:
 
-```typescript
+\`\`\`typescript
 // In upload page:
 if (useVercelBlob && allFiles.length > 50) {
   setUseChunkedUpload(true) // Activates ChunkedUploader component
 }
-```
+\`\`\`
 
 **User sees**:
 1. "Large Upload Detected" toast notification
@@ -229,7 +229,7 @@ If upload is interrupted:
 
 ### Environment Variables
 
-```env
+\`\`\`env
 # Enable Vercel Blob (required for chunked upload)
 NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
 
@@ -237,20 +237,20 @@ NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
 # Smaller = more resilient, more API calls
 # Larger = faster, higher timeout risk
 UPLOAD_CHUNK_SIZE=15
-```
+\`\`\`
 
 ### Tuning Parameters
 
 **File**: `lib/hooks/useUploadSession.ts`
-```typescript
+\`\`\`typescript
 const CHUNK_SIZE = 15; // Photos per chunk
-```
+\`\`\`
 
 **File**: `lib/utils/chunked-upload-handler.ts`
-```typescript
+\`\`\`typescript
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 3000, 10000]; // ms
-```
+\`\`\`
 
 ---
 
@@ -284,10 +284,10 @@ const RETRY_DELAYS = [1000, 3000, 10000]; // ms
 ### Test Case 4: Timeout Simulation
 
 Add artificial delay in API to simulate timeout:
-```typescript
+\`\`\`typescript
 // In /api/photos/save-blob
 await new Promise(resolve => setTimeout(resolve, 65000)); // 65s delay
-```
+\`\`\`
 **Expected**: Chunk fails, retries with backoff, eventually succeeds or marks as failed
 
 ### Test Case 5: Failed Chunk Retry
@@ -378,7 +378,7 @@ await new Promise(resolve => setTimeout(resolve, 65000)); // 65s delay
 
 ## Database Schema
 
-```sql
+\`\`\`sql
 CREATE TABLE public.upload_sessions (
   id BIGSERIAL PRIMARY KEY,
   session_id UUID UNIQUE DEFAULT gen_random_uuid(),
@@ -394,7 +394,7 @@ CREATE TABLE public.upload_sessions (
   completed_at TIMESTAMPTZ,
   last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-```
+\`\`\`
 
 **Indexes**:
 - `idx_upload_sessions_user_id` - User queries
@@ -442,9 +442,9 @@ The chunked upload scheduler solves the 600-photo upload timeout problem by:
 ## Quick Start
 
 1. **Enable Vercel Blob**:
-   ```env
+   \`\`\`env
    NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
-   ```
+   \`\`\`
 
 2. **Upload >50 photos**: Chunked uploader activates automatically
 

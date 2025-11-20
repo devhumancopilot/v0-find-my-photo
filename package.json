@@ -68,7 +68,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "util": "latest",
-    "uuid": "^13.0.0",
+    "uuid": "latest",
     "vaul": "^1.1.2",
     "ws": "latest",
     "zod": "3.25.76"
