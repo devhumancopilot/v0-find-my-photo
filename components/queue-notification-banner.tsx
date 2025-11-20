@@ -249,16 +249,8 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
     // Redirect to dashboard if not already there
     const currentPath = window.location.pathname
     if (currentPath !== '/dashboard') {
-      toast.info("Redirecting to Dashboard", {
-        description: "Starting photo processing. Redirecting to dashboard to track progress...",
-        duration: 2000,
-      })
-
-      // Redirect with autostart parameter
-      setTimeout(() => {
-        router.push('/dashboard?autostart=true')
-      }, 500)
-
+      // Redirect immediately with autostart parameter
+      router.push('/dashboard?autostart=true')
       return
     }
 
