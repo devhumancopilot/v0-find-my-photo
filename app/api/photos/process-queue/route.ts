@@ -48,7 +48,6 @@ export async function POST(request: NextRequest) {
     // Get pending queue items for this user
     // IMPORTANT: On Vercel serverless, we must await processing before returning
     // Process only a small batch to avoid timeouts (300s max on Pro plan)
-    const batchSize = parseInt(process.env.PROCESS_QUEUE_BATCH_SIZE || '3', 10)
     const { data: queueItems, error: queueError } = await serviceSupabase
       .from('photo_processing_queue')
       .select('id, photo_id, retry_count')
@@ -56,7 +55,7 @@ export async function POST(request: NextRequest) {
       .eq('status', 'pending')
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
-      .limit(batchSize) // Process photos per request - configurable to stay within Vercel timeout limits
+      .limit(3) // Process only 3 photos per request to stay within Vercel timeout limits
 
     if (queueError) {
       console.error('[Process Queue] Error fetching queue:', queueError)
@@ -75,7 +74,6 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    console.log(`[Process Queue] Batch size: ${batchSize} (configurable via PROCESS_QUEUE_BATCH_SIZE)`)
     console.log(`[Process Queue] Found ${queueItems.length} photos to process for user ${userId}`)
 
     // CRITICAL: On Vercel serverless, we MUST await processing
