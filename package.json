@@ -40,7 +40,7 @@
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "@vercel/analytics": "latest",
-    "@vercel/blob": "^2.0.0",
+    "@vercel/blob": "latest",
     "@vladmandic/face-api": "latest",
     "autoprefixer": "^10.4.20",
     "canvas": "latest",

@@ -34,17 +34,17 @@ Add these variables to your Vercel project:
 1. Go to your project → **Settings** → **Environment Variables**
 2. Add the following:
 
-```env
+\`\`\`env
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxxxxxx
 NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
-```
+\`\`\`
 
 **In Local Development (.env.local):**
 
-```env
+\`\`\`env
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxxxxxx
 NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
-```
+\`\`\`
 
 ### 3. Deploy or Restart
 
@@ -64,7 +64,7 @@ NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
 
 ### Architecture
 
-```
+\`\`\`
 ┌─────────────┐                    ┌──────────────────┐
 │   Browser   │◄──── Token ────────│  /api/upload/    │
 │             │      Request       │     token        │
@@ -89,7 +89,7 @@ NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
                                    │   Supabase DB    │
                                    │   + Queue        │
                                    └──────────────────┘
-```
+\`\`\`
 
 ## Dual Storage Support
 
@@ -102,14 +102,14 @@ The app supports **both** Vercel Blob and Supabase Storage simultaneously:
 ### Switching Between Storage Types
 
 **Enable Vercel Blob:**
-```env
+\`\`\`env
 NEXT_PUBLIC_ENABLE_VERCEL_BLOB=true
-```
+\`\`\`
 
 **Disable Vercel Blob (use Supabase Storage):**
-```env
+\`\`\`env
 NEXT_PUBLIC_ENABLE_VERCEL_BLOB=false
-```
+\`\`\`
 
 No code changes needed - the app detects the environment variable.
 
