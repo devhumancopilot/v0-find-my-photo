@@ -102,26 +102,26 @@ With default batch size of 3 photos:
 ### For 100+ Photos
 
 #### Option 1: Keep Default (Recommended)
-```env
+\`\`\`env
 PROCESS_QUEUE_BATCH_SIZE=3
-```
+\`\`\`
 - **Pros**: Safe, well-tested, reliable
 - **Cons**: More batches (more API calls)
 - **Use when**: Reliability is priority
 
 #### Option 2: Increase Batch Size
-```env
+\`\`\`env
 PROCESS_QUEUE_BATCH_SIZE=5
-```
+\`\`\`
 - **Pros**: Fewer batches, faster completion
 - **Cons**: Higher timeout risk per batch
 - **Calculation**: 5 photos × 35s = 175s (still safe with 125s margin)
 - **Use when**: Photos are simple (no face detection)
 
 #### Option 3: Conservative (High Reliability)
-```env
+\`\`\`env
 PROCESS_QUEUE_BATCH_SIZE=2
-```
+\`\`\`
 - **Pros**: Maximum safety margin
 - **Cons**: More batches needed
 - **Use when**: Face detection enabled or complex processing
@@ -129,21 +129,21 @@ PROCESS_QUEUE_BATCH_SIZE=2
 ### Optimizing Processing Speed
 
 1. **Disable Face Detection** (if not needed):
-   ```env
+   \`\`\`env
    ENABLE_FACE_DETECTION=false
-   ```
+   \`\`\`
    Saves 5-10 seconds per photo
 
 2. **Use CLIP Provider** (for faster embeddings):
-   ```env
+   \`\`\`env
    EMBEDDING_PROVIDER=huggingface
-   ```
+   \`\`\`
    CLIP is optimized for image embeddings
 
 3. **Increase Batch Size** (if within timeout limits):
-   ```env
+   \`\`\`env
    PROCESS_QUEUE_BATCH_SIZE=5
-   ```
+   \`\`\`
    Reduces total batches from 34 to 20 for 100 photos
 
 ## Testing Results
@@ -176,11 +176,11 @@ PROCESS_QUEUE_BATCH_SIZE=2
 - Clear success/error messages
 
 ### Developer Logging
-```javascript
+\`\`\`javascript
 console.log(`[Queue Banner] Batch ${X} complete: ${processed} processed, ${remaining} remaining`)
 console.log(`[Queue Banner] Waiting ${delay}ms before next batch...`)
 console.error(`[Queue Banner] Batch ${X} failed (attempt ${Y}/${MAX}):`, error)
-```
+\`\`\`
 
 ## Conclusion
 
