@@ -6,6 +6,10 @@ interface PrintPageProps {
   params: Promise<{
     id: string
   }>
+  searchParams: Promise<{
+    layout?: string
+    pdf?: string
+  }>
 }
 
 // Layout template selection logic based on photo count
@@ -25,9 +29,10 @@ interface Photo {
   created_at: string
 }
 
-export default async function PrintPage({ params }: PrintPageProps) {
+export default async function PrintPage({ params, searchParams }: PrintPageProps) {
   // Await params before using its properties (Next.js 15 requirement)
   const { id } = await params
+  const { layout, pdf } = await searchParams
 
   const supabase = await createClient()
   const {
@@ -68,9 +73,10 @@ export default async function PrintPage({ params }: PrintPageProps) {
     albumPhotos = photos || []
   }
 
-  // Select layout template based on photo count
-  const layoutTemplate = selectLayoutTemplate(albumPhotos.length)
+  // Use layout from query param if provided, otherwise select based on photo count
+  const layoutTemplate = layout || selectLayoutTemplate(albumPhotos.length)
   const albumTitle = album.album_title || "Untitled Album"
+  const isPDFMode = pdf === 'true'
 
   return (
     <PrintPreview
@@ -79,6 +85,7 @@ export default async function PrintPage({ params }: PrintPageProps) {
       albumId={id}
       layoutTemplate={layoutTemplate}
       createdAt={album.created_at}
+      isPDFMode={isPDFMode}
     />
   )
 }

@@ -101,32 +101,52 @@ export async function POST(request: Request) {
 
     console.log(`[PDF Generator] PDF generated, size: ${pdfBuffer.length} bytes`)
 
-    // Upload to Supabase Storage
-    const fileName = generatePDFFileName(albumId)
-    console.log(`[PDF Generator] Uploading to storage: ${fileName}`)
+    // Check if client wants direct download or storage upload
+    const returnType = body.returnType || 'download' // 'download' or 'upload'
 
-    const { publicUrl, error: uploadError } = await uploadPDFToStorage(
-      pdfBuffer,
-      fileName
-    )
+    if (returnType === 'download') {
+      // Return PDF directly for download
+      const albumTitle = album.album_title || 'Untitled Album'
+      const fileName = `${albumTitle.replace(/[^a-z0-9]/gi, '_')}_${layoutTemplate}.pdf`
 
-    if (uploadError || !publicUrl) {
-      console.error('[PDF Generator] Upload error:', uploadError)
-      return NextResponse.json(
-        { error: `Failed to upload PDF: ${uploadError}` },
-        { status: 500 }
+      console.log(`[PDF Generator] Returning PDF for direct download`)
+
+      return new NextResponse(pdfBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${fileName}"`,
+          'Content-Length': pdfBuffer.length.toString(),
+        },
+      })
+    } else {
+      // Upload to Supabase Storage (for Gelato integration)
+      const fileName = generatePDFFileName(albumId)
+      console.log(`[PDF Generator] Uploading to storage: ${fileName}`)
+
+      const { publicUrl, error: uploadError } = await uploadPDFToStorage(
+        pdfBuffer,
+        fileName
       )
+
+      if (uploadError || !publicUrl) {
+        console.error('[PDF Generator] Upload error:', uploadError)
+        return NextResponse.json(
+          { error: `Failed to upload PDF: ${uploadError}` },
+          { status: 500 }
+        )
+      }
+
+      console.log(`[PDF Generator] PDF uploaded successfully: ${publicUrl}`)
+
+      return NextResponse.json({
+        success: true,
+        fileUrl: publicUrl,
+        fileName,
+        fileSize: pdfBuffer.length,
+        photoCount: albumPhotos.length,
+      })
     }
-
-    console.log(`[PDF Generator] PDF uploaded successfully: ${publicUrl}`)
-
-    return NextResponse.json({
-      success: true,
-      fileUrl: publicUrl,
-      fileName,
-      fileSize: pdfBuffer.length,
-      photoCount: albumPhotos.length,
-    })
   } catch (error) {
     console.error('[PDF Generator] Error:', error)
     return NextResponse.json(

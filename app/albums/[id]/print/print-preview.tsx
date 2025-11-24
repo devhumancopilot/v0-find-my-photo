@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, Printer, Grid3x3, Grid2x2, LayoutGrid, Image as ImageIcon, Package, ZoomIn, ZoomOut } from "lucide-react"
+import { ArrowLeft, Printer, Grid3x3, Grid2x2, LayoutGrid, Image as ImageIcon, Package, ZoomIn, ZoomOut, Download, Loader2 } from "lucide-react"
 import { PrintOrderDialog } from "@/components/print-order-dialog"
+import { toast } from "sonner"
 
 interface Photo {
   id: number
@@ -22,6 +23,7 @@ interface PrintPreviewProps {
   albumId: string
   layoutTemplate: string
   createdAt: string
+  isPDFMode?: boolean
 }
 
 // Template options configuration
@@ -584,15 +586,106 @@ function CollageLayout({ photos, albumTitle }: { photos: Photo[]; albumTitle: st
   )
 }
 
-export default function PrintPreview({ photos, albumTitle, albumId, layoutTemplate, createdAt }: PrintPreviewProps) {
+export default function PrintPreview({ photos, albumTitle, albumId, layoutTemplate, createdAt, isPDFMode = false }: PrintPreviewProps) {
   // State for selected template - initialize with the suggested template
   const [selectedTemplate, setSelectedTemplate] = useState(layoutTemplate)
   const [orderDialogOpen, setOrderDialogOpen] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(75) // Default 75% zoom
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [isPDFReady, setIsPDFReady] = useState(false)
+  const pdfContentRef = useRef<HTMLDivElement>(null)
+
+  // Wait for images and styles to load before marking as PDF-ready
+  useEffect(() => {
+    if (!isPDFMode) return
+
+    const waitForReady = async () => {
+      // Wait for all images to load
+      const images = Array.from(document.images)
+      await Promise.all(
+        images.map(
+          (img) =>
+            new Promise((resolve) => {
+              if (img.complete) {
+                resolve(null)
+              } else {
+                img.onload = () => resolve(null)
+                img.onerror = () => resolve(null)
+              }
+            })
+        )
+      )
+
+      // Additional delay to ensure CSS is fully applied
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // Mark as ready
+      setIsPDFReady(true)
+      console.log('[Print Preview] PDF ready')
+    }
+
+    waitForReady()
+  }, [isPDFMode])
 
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
       window.print()
+    }
+  }
+
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true)
+
+    try {
+      toast.info('Generating PDF', {
+        description: 'Please wait while we create your high-quality album PDF with Puppeteer...',
+      })
+
+      console.log('[PDF] Calling WYSIWYG Puppeteer API endpoint...')
+
+      // Use WYSIWYG endpoint that navigates to actual preview page (TRUE "what you see is what you get")
+      const response = await fetch(`/api/album/${albumId}/generate-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          layoutTemplate: selectedTemplate,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to generate PDF')
+      }
+
+      console.log('[PDF] PDF generated successfully, downloading...')
+
+      // Get the PDF blob from the response
+      const blob = await response.blob()
+
+      // Create a download link
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${albumTitle.replace(/[^a-z0-9]/gi, '_')}_${selectedTemplate}.pdf`
+      document.body.appendChild(a)
+      a.click()
+
+      // Cleanup
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('PDF Downloaded', {
+        description: 'Your album PDF has been downloaded with full styling!',
+      })
+    } catch (error) {
+      console.error('PDF generation error:', error)
+      toast.error('PDF Generation Failed', {
+        description: error instanceof Error ? error.message : 'Failed to generate PDF. Please try again.',
+      })
+    } finally {
+      setIsGeneratingPDF(false)
     }
   }
 
@@ -610,6 +703,24 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
 
       {/* Print-specific styles */}
       <style jsx global>{`
+        /* Page break helpers for html2pdf */
+        .page-wrapper {
+          page-break-after: always;
+          page-break-inside: avoid;
+          break-after: always;
+          break-inside: avoid;
+        }
+
+        .page-wrapper:last-child {
+          page-break-after: auto;
+          break-after: auto;
+        }
+
+        .print-page {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+
         @media print {
           body {
             margin: 0;
@@ -746,6 +857,7 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
       `}</style>
 
       {/* Screen-only header with navigation and action buttons */}
+      {!isPDFMode && (
       <div className="no-print sticky top-0 z-50 border-b border-gray-200 bg-white shadow-sm">
         <div className="flex items-center justify-between px-6 py-4">
           <Link href={`/albums/${albumId}`}>
@@ -776,6 +888,24 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
               <span className="relative font-semibold">Order Physical Album</span>
             </Button>
             <Button
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+              variant="default"
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingPDF ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download as PDF
+                </>
+              )}
+            </Button>
+            <Button
               onClick={handlePrint}
               variant="outline"
               className="border-2 border-gray-300 font-semibold transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:shadow-md"
@@ -786,10 +916,12 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Content Area: Sidebar + Preview */}
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className={isPDFMode ? "flex h-screen" : "flex h-[calc(100vh-73px)]"}>
         {/* Left Sidebar - Controls */}
+        {!isPDFMode && (
         <div className="no-print w-80 flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-white p-4">
           {/* Zoom Controls Section */}
           <div className="mb-6">
@@ -911,16 +1043,21 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
             </div>
           </div>
         </div>
+        )}
 
         {/* Right Side - Preview Area */}
-        <div className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 print:bg-white print:p-0">
+        <div
+          ref={pdfContentRef}
+          className={isPDFMode ? "flex-1 overflow-visible bg-white" : "flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 print:bg-white print:p-0"}
+        >
           <div className="w-full p-8 print:p-0">
             {/* Pages wrapper - pages wrap automatically based on zoom */}
             <div
               className="pages-wrapper print:p-0"
+              data-pdf-ready={isPDFReady ? "true" : undefined}
               style={{
                 // Pass zoom level as CSS variable for pages to use
-                ['--zoom-level' as any]: zoomLevel / 100,
+                ['--zoom-level' as any]: isPDFMode ? 1 : zoomLevel / 100,
               }}
             >
           {/* Render appropriate layout based on selected template */}
