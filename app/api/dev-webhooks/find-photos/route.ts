@@ -19,7 +19,7 @@ import {
   getEmbeddingConfig
 } from "@/lib/services/embeddings"
 import { generateCLIPTextEmbedding } from "@/lib/services/huggingface"
-import { matchPhotos } from "@/lib/services/database"
+import { matchPhotos, matchPhotosHybridReranked } from "@/lib/services/database"
 import { enhanceSearchResults, type PhotoWithMetadata } from "@/lib/services/search-enhancement"
 
 export async function POST(request: NextRequest) {
@@ -92,31 +92,51 @@ export async function POST(request: NextRequest) {
 
       if (query) {
         // ==========================================
-        // PURE CLIP TEXT SEARCH (caption + visual matching in same 512D space!)
-        // Uses CLIP text embeddings for BOTH caption-based AND visual matching
-        // This is what CLIP was designed for - perfect multimodal alignment!
+        // CLIP ZERO-SHOT RE-RANKED SEARCH
+        // Phase 1: Initial hybrid search with minimum CLIP threshold
+        // Phase 2: Re-rank using reference image similarity
+        //
+        // This filters out images that match text but not visually,
+        // then re-ranks remaining images by their visual similarity to the best match.
         // ==========================================
-        console.log(`[Fallback][CLIP][TEXT-SEARCH] Generating CLIP text embedding for query: "${query}"`)
+        console.log(`[Fallback][CLIP][RERANKED] Generating CLIP text embedding for query: "${query}"`)
 
         // Generate CLIP text embedding (512D) - compares with BOTH caption and image embeddings!
         const embeddingClip = await generateCLIPTextEmbedding(query)
-        console.log(`[Fallback][CLIP][TEXT-SEARCH] ✓ CLIP text embedding: ${embeddingClip.length}D`)
+        console.log(`[Fallback][CLIP][RERANKED] ✓ CLIP text embedding: ${embeddingClip.length}D`)
 
-        // Use hybrid search with SAME embedding for both
-        // This works because BOTH embedding and embedding_clip are now CLIP 512D!
-        console.log(`[Fallback][CLIP][TEXT-SEARCH] Performing pure CLIP hybrid search`)
-        console.log(`[Fallback][CLIP][TEXT-SEARCH] User ID: ${requestUser.id}`)
+        // Use re-ranked hybrid search with CLIP zero-shot verification
+        console.log(`[Fallback][CLIP][RERANKED] Performing CLIP zero-shot re-ranked search`)
+        console.log(`[Fallback][CLIP][RERANKED] User ID: ${requestUser.id}`)
 
-        const { matchPhotosHybrid } = await import("@/lib/services/database")
-        allPhotos = await matchPhotosHybrid(
+        // Configuration for re-ranking
+        const MIN_CLIP_SCORE = parseFloat(process.env.CLIP_MIN_SCORE || "0.20") // 20% minimum CLIP similarity
+        const REFERENCE_WEIGHT = parseFloat(process.env.CLIP_REFERENCE_WEIGHT || "0.5") // 50% weight for reference similarity
+        const NUM_REFERENCES = parseInt(process.env.CLIP_NUM_REFERENCES || "3", 10) // Number of top results to use as references
+
+        console.log(`[Fallback][CLIP][RERANKED] Min CLIP score: ${(MIN_CLIP_SCORE * 100).toFixed(0)}%`)
+        console.log(`[Fallback][CLIP][RERANKED] Reference weight: ${(REFERENCE_WEIGHT * 100).toFixed(0)}%`)
+        console.log(`[Fallback][CLIP][RERANKED] Num references: ${NUM_REFERENCES}`)
+
+        allPhotos = await matchPhotosHybridReranked(
           embeddingClip,     // 512D CLIP for caption matching (text-to-text)
           embeddingClip,     // 512D CLIP for visual matching (text-to-image)
           requestUser.id,
           matchCount,
-          0.5,  // 50% weight for caption matching (text-to-text = high similarity)
-          0.5,  // 50% weight for visual matching (text-to-image = lower similarity)
+          MIN_CLIP_SCORE,    // Minimum CLIP score to include
+          REFERENCE_WEIGHT,  // How much reference similarity affects ranking
+          NUM_REFERENCES,    // Number of top results to use as references
           serviceSupabase
         )
+
+        // Log reference images info if available
+        const referencePhotos = allPhotos.filter((p: any) => p.is_reference)
+        if (referencePhotos.length > 0) {
+          console.log(`[Fallback][CLIP][RERANKED] Reference images selected (${referencePhotos.length}):`)
+          referencePhotos.forEach((ref: any, idx: number) => {
+            console.log(`[Fallback][CLIP][RERANKED]   ${idx + 1}. ${ref.name} - Text: ${(ref.similarity_text * 100).toFixed(2)}%, CLIP: ${(ref.similarity_clip * 100).toFixed(2)}%`)
+          })
+        }
       } else if (image) {
         // ==========================================
         // IMAGE-BASED SEARCH (single embedding)
@@ -144,8 +164,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "No query or image provided" }, { status: 400 })
       }
 
-      const searchType = query ? 'HYBRID' : embeddingConfig.provider.toUpperCase()
-      console.log(`[Fallback][${searchType}] Found ${allPhotos.length} photos (before filtering)`)
+      const searchType = query ? 'RERANKED' : embeddingConfig.provider.toUpperCase()
+      console.log(`[Fallback][${searchType}] Found ${allPhotos.length} photos (after CLIP threshold filtering)`)
 
       // Filter to only include photos above minimum similarity threshold
       // Note: Hybrid search combines both approaches:
@@ -193,13 +213,13 @@ export async function POST(request: NextRequest) {
           const score = photo.finalScore || photo.similarity
           const similarityPercent = (score * 100).toFixed(2)
           // Adjust relevance thresholds based on search type
-          // HYBRID: 60%+ = high, 45%+ = medium, 35%+ = low
+          // RERANKED: 80%+ = high, 60%+ = medium, 40%+ = low (scores are higher due to reference boost)
           // CLIP: 35%+ = high, 28%+ = medium, 22%+ = low
           // OpenAI: 70%+ = high, 50%+ = medium, 35%+ = low
-          const isHybridSearch = searchType === 'HYBRID'
+          const isRerankedSearch = searchType === 'RERANKED'
           const isClipSearch = searchType === 'CLIP'
-          const relevance = isHybridSearch
-            ? (score >= 0.60 ? '🟢 HIGH' : score >= 0.45 ? '🟡 MEDIUM' : score >= 0.35 ? '🟠 LOW' : '🔴 VERY LOW')
+          const relevance = isRerankedSearch
+            ? (score >= 0.80 ? '🟢 HIGH' : score >= 0.60 ? '🟡 MEDIUM' : score >= 0.40 ? '🟠 LOW' : '🔴 VERY LOW')
             : isClipSearch
             ? (score >= 0.35 ? '🟢 HIGH' : score >= 0.28 ? '🟡 MEDIUM' : score >= 0.22 ? '🟠 LOW' : '🔴 VERY LOW')
             : (score >= 0.7 ? '🟢 HIGH' : score >= 0.5 ? '🟡 MEDIUM' : score >= 0.35 ? '🟠 LOW' : '🔴 VERY LOW')
@@ -211,11 +231,11 @@ export async function POST(request: NextRequest) {
         console.log(`[Fallback][${searchType}] ===================================`)
 
         // Summary by relevance level (adjusted for search type)
-        const isHybridSearch = searchType === 'HYBRID'
+        const isRerankedSearch = searchType === 'RERANKED'
         const isClipSearch = searchType === 'CLIP'
 
-        const thresholds = isHybridSearch
-          ? { high: 0.60, medHigh: 0.45, medLow: 0.35 }
+        const thresholds = isRerankedSearch
+          ? { high: 0.80, medHigh: 0.60, medLow: 0.40 }
           : isClipSearch
           ? { high: 0.35, medHigh: 0.28, medLow: 0.22 }
           : { high: 0.7, medHigh: 0.5, medLow: 0.35 }
@@ -232,8 +252,8 @@ export async function POST(request: NextRequest) {
           return score >= thresholds.medLow && score < thresholds.medHigh
         }).length
 
-        const summaryMsg = isHybridSearch
-          ? `Summary: ${high} high (≥60%), ${medium} medium (45-59%), ${low} low (35-44%)`
+        const summaryMsg = isRerankedSearch
+          ? `Summary: ${high} high (≥80%), ${medium} medium (60-79%), ${low} low (40-59%)`
           : isClipSearch
           ? `Summary: ${high} high (≥35%), ${medium} medium (28-34%), ${low} low (22-27%)`
           : `Summary: ${high} high (≥70%), ${medium} medium (50-69%), ${low} low (35-49%)`
@@ -245,7 +265,7 @@ export async function POST(request: NextRequest) {
 
       console.log(`[Fallback][SEARCH-END] ========================================`)
       console.log(`[Fallback][SEARCH-END] Search Complete`)
-      console.log(`[Fallback][SEARCH-END] Method: ${query ? 'HYBRID (Text + CLIP)' : embeddingConfig.provider.toUpperCase()}`)
+      console.log(`[Fallback][SEARCH-END] Method: ${query ? 'CLIP Zero-Shot Re-ranked' : embeddingConfig.provider.toUpperCase()}`)
       console.log(`[Fallback][SEARCH-END] Results: ${photos.length} photos returned`)
       console.log(`[Fallback][SEARCH-END] ========================================`)
 
@@ -260,6 +280,13 @@ export async function POST(request: NextRequest) {
         is_favorite: photo.is_favorite,
         // Include score breakdown for debugging (optional)
         ...(photo.scoreBreakdown && { scoreBreakdown: photo.scoreBreakdown }),
+        // Include re-ranking info if available
+        ...(photo.reference_similarity !== undefined && {
+          reference_similarity: photo.reference_similarity,
+          is_reference: photo.is_reference,
+          similarity_text: photo.similarity_text,
+          similarity_clip: photo.similarity_clip,
+        }),
       }))
 
       return NextResponse.json({

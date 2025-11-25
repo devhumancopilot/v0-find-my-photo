@@ -31,6 +31,11 @@ export interface MatchedPhotoHybrid extends MatchedPhoto {
   similarity_clip: number
 }
 
+export interface MatchedPhotoReranked extends MatchedPhotoHybrid {
+  reference_similarity: number
+  is_reference: boolean
+}
+
 export interface AlbumData {
   album_title: string
   description?: string | null
@@ -272,6 +277,112 @@ export async function matchPhotosHybrid(
   } catch (error) {
     console.error("Error in hybrid photo matching:", error)
     throw new Error(`Failed to match photos (hybrid): ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
+}
+
+/**
+ * Search photos using hybrid vector similarity with CLIP zero-shot re-ranking
+ *
+ * This implements a two-phase search:
+ * 1. Initial hybrid search (text + CLIP) with minimum CLIP threshold
+ * 2. Re-ranking using reference image similarity (top N results become references)
+ *
+ * Images that don't visually match (low CLIP score) are filtered out.
+ * Remaining images are re-ranked by their average visual similarity to multiple references.
+ *
+ * Using multiple references (default 3) provides better discrimination:
+ * - Related images will be similar to ALL references (high average)
+ * - Unrelated images may match 1 reference but not all (lower average)
+ *
+ * @param embeddingText - Text embedding (512D CLIP)
+ * @param embeddingClip - CLIP embedding (512D)
+ * @param userId - User ID to filter by
+ * @param matchCount - Number of results to return (default 50)
+ * @param minClipScore - Minimum CLIP similarity to include (default 0.20 = 20%)
+ * @param referenceWeight - How much reference similarity affects ranking (default 0.5)
+ * @param numReferences - Number of top results to use as references (default 3)
+ * @returns Array of matched photos with combined scores and reference similarity
+ */
+export async function matchPhotosHybridReranked(
+  embeddingText: number[],
+  embeddingClip: number[],
+  userId: string,
+  matchCount: number = 50,
+  minClipScore: number = 0.20,
+  referenceWeight: number = 0.5,
+  numReferences: number = 3,
+  supabaseClient?: any
+): Promise<MatchedPhotoReranked[]> {
+  try {
+    const supabase = supabaseClient || await createClient()
+
+    // Check current auth state (for logging purposes)
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const isServiceRole = !currentUser && supabaseClient
+
+    console.log(`[Database][RERANKED] Current authenticated user: ${currentUser?.id || 'NONE'}`)
+    console.log(`[Database][RERANKED] Searching for user_id: ${userId}`)
+    console.log(`[Database][RERANKED] Using service role: ${isServiceRole}`)
+
+    console.log(`[Database][RERANKED] Calling match_photos_hybrid_reranked RPC:`, {
+      embedding_text_length: embeddingText.length,
+      embedding_clip_length: embeddingClip.length,
+      filter: { user_id: userId },
+      match_count: matchCount,
+      min_clip_score: minClipScore,
+      reference_weight: referenceWeight,
+      num_references: numReferences
+    })
+
+    const { data, error } = await supabase.rpc("match_photos_hybrid_reranked", {
+      query_embedding_text: embeddingText,
+      query_embedding_clip: embeddingClip,
+      match_count: matchCount,
+      filter: { user_id: userId },
+      min_clip_score: minClipScore,
+      reference_weight: referenceWeight,
+      num_references: numReferences,
+    })
+
+    if (error) {
+      console.error(`[Database][RERANKED] match_photos_hybrid_reranked RPC error:`, error)
+      console.error(`[Database][RERANKED] Full error details:`, JSON.stringify(error, null, 2))
+      throw new Error(`Hybrid re-ranked search failed: ${error.message}`)
+    }
+
+    console.log(`[Database][RERANKED] match_photos_hybrid_reranked returned ${data?.length || 0} results`)
+
+    // Log detailed results
+    if (data && data.length > 0) {
+      console.log(`[Database][RERANKED] Results breakdown:`)
+      const asMatchedPhotos = data as MatchedPhotoReranked[]
+
+      // Find and log all reference images
+      const referencePhotos = asMatchedPhotos.filter(p => p.is_reference)
+      if (referencePhotos.length > 0) {
+        console.log(`[Database][RERANKED] Reference images (${referencePhotos.length}):`)
+        referencePhotos.forEach((ref, idx) => {
+          console.log(`[Database][RERANKED]   ${idx + 1}. ${ref.name} - Text: ${(ref.similarity_text * 100).toFixed(2)}%, CLIP: ${(ref.similarity_clip * 100).toFixed(2)}%`)
+        })
+      }
+
+      asMatchedPhotos.slice(0, 5).forEach((photo, idx) => {
+        const refIndicator = photo.is_reference ? ' [REF]' : ''
+        console.log(`[Database][RERANKED]   ${idx + 1}. ${photo.name}${refIndicator}`)
+        console.log(`[Database][RERANKED]      Final: ${(photo.similarity * 100).toFixed(2)}%`)
+        console.log(`[Database][RERANKED]      Text: ${(photo.similarity_text * 100).toFixed(2)}%, CLIP: ${(photo.similarity_clip * 100).toFixed(2)}%, RefSim: ${(photo.reference_similarity * 100).toFixed(2)}%`)
+      })
+      if (data.length > 5) {
+        console.log(`[Database][RERANKED]   ... and ${data.length - 5} more results`)
+      }
+    } else {
+      console.log(`[Database][RERANKED] ⚠️ No results returned (no images passed CLIP threshold of ${(minClipScore * 100).toFixed(0)}%)`)
+    }
+
+    return (data || []) as MatchedPhotoReranked[]
+  } catch (error) {
+    console.error("Error in hybrid re-ranked photo matching:", error)
+    throw new Error(`Failed to match photos (hybrid reranked): ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
 
