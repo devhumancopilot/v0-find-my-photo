@@ -905,14 +905,6 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
                 </>
               )}
             </Button>
-            <Button
-              onClick={handlePrint}
-              variant="outline"
-              className="border-2 border-gray-300 font-semibold transition-all duration-300 hover:scale-105 hover:border-purple-400 hover:shadow-md"
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print Album
-            </Button>
           </div>
         </div>
       </div>
