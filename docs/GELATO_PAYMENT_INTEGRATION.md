@@ -33,18 +33,18 @@ The FindMyPhoto application has a complete Gelato print-on-demand integration fo
 
 ### Current Order Flow (Broken)
 
-```
+\`\`\`
 1. User selects product & quantity
 2. User enters shipping address
 3. System fetches quote from Gelato (price displayed)
 4. User clicks "Place Order"
 5. Order sent directly to Gelato ← NO PAYMENT COLLECTED
 6. Order saved to database as "pending"
-```
+\`\`\`
 
 ### Expected Order Flow (Correct)
 
-```
+\`\`\`
 1. User selects product & quantity
 2. User enters shipping address
 3. System fetches quote from Gelato (price displayed)
@@ -52,7 +52,7 @@ The FindMyPhoto application has a complete Gelato print-on-demand integration fo
 5. Payment processed via Stripe ← NEW STEP
 6. On payment success → Order sent to Gelato
 7. Order saved to database with payment confirmation
-```
+\`\`\`
 
 ## Impact of Missing Payment
 
@@ -73,16 +73,16 @@ The FindMyPhoto application has a complete Gelato print-on-demand integration fo
 - Webhook support for async confirmation
 
 **Required Packages:**
-```bash
+\`\`\`bash
 npm install stripe @stripe/react-stripe-js @stripe/stripe-js
-```
+\`\`\`
 
 **Environment Variables Needed:**
-```env
+\`\`\`env
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_PUBLISHABLE_KEY=pk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-```
+\`\`\`
 
 ### 2. New API Routes Required
 
@@ -95,12 +95,12 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 ### 3. Database Schema Updates
 
 Add to `print_orders` table:
-```sql
+\`\`\`sql
 ALTER TABLE print_orders ADD COLUMN payment_status TEXT DEFAULT 'pending';
 ALTER TABLE print_orders ADD COLUMN payment_intent_id TEXT;
 ALTER TABLE print_orders ADD COLUMN payment_method TEXT;
 ALTER TABLE print_orders ADD COLUMN paid_at TIMESTAMPTZ;
-```
+\`\`\`
 
 Payment status values: `pending`, `processing`, `succeeded`, `failed`, `refunded`
 
@@ -122,13 +122,13 @@ Update `components/print-order-dialog.tsx`:
 ### 5. Order Flow Logic Update
 
 Current code in `/app/api/gelato/order/route.ts`:
-```typescript
+\`\`\`typescript
 // Currently creates Gelato order immediately
 const gelatoOrder = await gelatoClient.createOrder(orderData);
-```
+\`\`\`
 
 Required change:
-```typescript
+\`\`\`typescript
 // 1. Verify payment succeeded
 if (paymentStatus !== 'succeeded') {
   return Response.json({ error: 'Payment required' }, { status: 402 });
@@ -136,7 +136,7 @@ if (paymentStatus !== 'succeeded') {
 
 // 2. Only then create Gelato order
 const gelatoOrder = await gelatoClient.createOrder(orderData);
-```
+\`\`\`
 
 ## Implementation Checklist
 
