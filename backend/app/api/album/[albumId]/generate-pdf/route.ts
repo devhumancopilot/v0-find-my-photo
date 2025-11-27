@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { generateAlbumPDFFromPreview } from '@/lib/pdf/generator'
 
 export async function POST(
@@ -58,18 +58,28 @@ export async function POST(
 
     console.log(`[PDF Generator] Generating WYSIWYG PDF for album ${albumId}`)
 
-    // Verify album ownership
-    const { data: album, error: albumError } = await supabase
+    // Get album using service role client (bypasses RLS for reliable querying)
+    const serviceSupabase = createServiceRoleClient()
+    const { data: album, error: albumError } = await serviceSupabase
       .from('albums')
       .select('id, album_title, user_id')
       .eq('id', albumId)
-      .eq('user_id', user.id)
       .single()
 
     if (albumError || !album) {
+      console.error('[PDF Generator] Album not found:', albumError)
       return NextResponse.json(
-        { error: 'Album not found or access denied' },
+        { error: 'Album not found' },
         { status: 404 }
+      )
+    }
+
+    // Verify ownership manually
+    if (album.user_id !== user.id) {
+      console.error('[PDF Generator] Access denied: album belongs to different user')
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
       )
     }
 
