@@ -679,28 +679,40 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
           logging: false,
           backgroundColor: '#ffffff',
           onclone: (clonedDoc) => {
-            // Convert oklch/modern CSS colors to RGB for html2canvas compatibility
-            // Walk through all elements and convert computed colors to RGB
-            const allElements = clonedDoc.querySelectorAll('*')
-            allElements.forEach((el) => {
-              if (el instanceof HTMLElement) {
-                const computed = window.getComputedStyle(el)
+            // Remove all stylesheets to prevent html2canvas from parsing oklch colors
+            // We'll replace them with inline RGB styles from computed values
+            const stylesheets = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]')
+            stylesheets.forEach(sheet => sheet.remove())
 
-                // Get computed RGB values and apply them directly
-                const bgColor = computed.backgroundColor
-                const textColor = computed.color
-                const borderColor = computed.borderColor
+            // Get all elements from the cloned document
+            const clonedElements = clonedDoc.querySelectorAll('*')
+            const originalElements = document.querySelectorAll('.print-page *')
 
-                // Only override if we have valid RGB values (computed styles are always RGB)
-                if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)') {
-                  el.style.backgroundColor = bgColor
-                }
-                if (textColor) {
-                  el.style.color = textColor
-                }
-                if (borderColor) {
-                  el.style.borderColor = borderColor
-                }
+            // Apply computed styles as inline styles (computed styles are always RGB)
+            clonedElements.forEach((clonedEl, index) => {
+              if (clonedEl instanceof HTMLElement && originalElements[index]) {
+                const computed = window.getComputedStyle(originalElements[index])
+
+                // Apply all color-related properties as inline styles
+                clonedEl.style.backgroundColor = computed.backgroundColor
+                clonedEl.style.color = computed.color
+                clonedEl.style.borderColor = computed.borderColor
+                clonedEl.style.borderTopColor = computed.borderTopColor
+                clonedEl.style.borderRightColor = computed.borderRightColor
+                clonedEl.style.borderBottomColor = computed.borderBottomColor
+                clonedEl.style.borderLeftColor = computed.borderLeftColor
+
+                // Apply layout/sizing properties
+                clonedEl.style.display = computed.display
+                clonedEl.style.width = computed.width
+                clonedEl.style.height = computed.height
+                clonedEl.style.margin = computed.margin
+                clonedEl.style.padding = computed.padding
+                clonedEl.style.fontSize = computed.fontSize
+                clonedEl.style.fontWeight = computed.fontWeight
+                clonedEl.style.fontFamily = computed.fontFamily
+                clonedEl.style.lineHeight = computed.lineHeight
+                clonedEl.style.textAlign = computed.textAlign
               }
             })
           },
