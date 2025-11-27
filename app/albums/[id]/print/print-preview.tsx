@@ -678,6 +678,32 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
           useCORS: true, // Allow cross-origin images
           logging: false,
           backgroundColor: '#ffffff',
+          onclone: (clonedDoc) => {
+            // Convert oklch/modern CSS colors to RGB for html2canvas compatibility
+            // Walk through all elements and convert computed colors to RGB
+            const allElements = clonedDoc.querySelectorAll('*')
+            allElements.forEach((el) => {
+              if (el instanceof HTMLElement) {
+                const computed = window.getComputedStyle(el)
+
+                // Get computed RGB values and apply them directly
+                const bgColor = computed.backgroundColor
+                const textColor = computed.color
+                const borderColor = computed.borderColor
+
+                // Only override if we have valid RGB values (computed styles are always RGB)
+                if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)') {
+                  el.style.backgroundColor = bgColor
+                }
+                if (textColor) {
+                  el.style.color = textColor
+                }
+                if (borderColor) {
+                  el.style.borderColor = borderColor
+                }
+              }
+            })
+          },
         })
 
         // Convert canvas to image
