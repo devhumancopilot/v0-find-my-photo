@@ -645,6 +645,7 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
 
       // Use WYSIWYG endpoint that navigates to actual preview page (TRUE "what you see is what you get")
       const response = await fetch(`/api/album/${albumId}/generate-pdf`, {
+        signal: AbortSignal.timeout(120000), // 2 minute timeout
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -654,9 +655,21 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
         }),
       })
 
+      console.log('[PDF] Response status:', response.status, 'Content-Type:', response.headers.get('content-type'))
+
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to generate PDF')
+        // Try to parse JSON error, fallback to text if not JSON
+        let errorMessage = 'Failed to generate PDF'
+        try {
+          const error = await response.json()
+          errorMessage = error.error || error.message || errorMessage
+        } catch (e) {
+          // Response is not JSON (might be HTML error page or timeout)
+          const text = await response.text()
+          console.error('[PDF] Non-JSON error response:', text.substring(0, 200))
+          errorMessage = `Server error (${response.status}): ${text.substring(0, 100)}`
+        }
+        throw new Error(errorMessage)
       }
 
       console.log('[PDF] PDF generated successfully, downloading...')
