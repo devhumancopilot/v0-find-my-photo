@@ -649,6 +649,14 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
 
       console.log('[PDF] Using API URL:', apiUrl)
 
+      // Get Supabase access token for cross-origin auth
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+
+      if (!accessToken) {
+        throw new Error('Not authenticated. Please sign in again.')
+      }
+
       // Use WYSIWYG endpoint that navigates to actual preview page (TRUE "what you see is what you get")
       const response = await fetch(apiUrl, {
         signal: AbortSignal.timeout(120000), // 2 minute timeout
@@ -656,6 +664,7 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`, // Add auth token for cross-origin requests
         },
         body: JSON.stringify({
           layoutTemplate: selectedTemplate,

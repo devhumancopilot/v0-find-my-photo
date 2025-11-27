@@ -18,14 +18,30 @@ export async function POST(
     // Await params before using its properties (Next.js 15 requirement)
     const { albumId } = await params
 
-    // Verify authentication
+    // Verify authentication - support both cookie-based (proxy) and token-based (direct) auth
+    const authHeader = request.headers.get('authorization')
     const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+
+    let user
+    let authError
+
+    if (authHeader?.startsWith('Bearer ')) {
+      // Direct request with Authorization header (cross-origin)
+      const token = authHeader.substring(7)
+      const { data, error } = await supabase.auth.getUser(token)
+      user = data.user
+      authError = error
+      console.log('[PDF Generator] Using token-based auth')
+    } else {
+      // Proxy request with cookies (same-origin)
+      const { data, error } = await supabase.auth.getUser()
+      user = data.user
+      authError = error
+      console.log('[PDF Generator] Using cookie-based auth')
+    }
 
     if (authError || !user) {
+      console.error('[PDF Generator] Auth error:', authError)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
