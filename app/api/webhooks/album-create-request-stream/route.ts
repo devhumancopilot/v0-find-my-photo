@@ -157,29 +157,42 @@ export async function POST(request: NextRequest) {
           const enableVisionReasoning = process.env.ENABLE_VISION_RERANKING !== "false"
 
           if (enableVisionReasoning) {
-            sendSSE(controller, "progress", {
-              stage: "vision_start",
-              message: "Starting GPT Vision validation...",
-              educational: "Using AI to verify each image truly matches your description",
-            })
+            // OPTIMIZATION FOR VERCEL HOBBY: Only validate top N photos to stay under 10s timeout
+            const maxVisionPhotos = parseInt(process.env.VISION_MAX_PHOTOS || "20", 10)
+            const photosToValidate = enhancedPhotos.slice(0, maxVisionPhotos)
+            const photosToSkip = enhancedPhotos.slice(maxVisionPhotos)
 
-            // Apply vision reasoning with progress callback
-            const visionFilteredPhotos = await reRankWithVisionReasoning(
-              enhancedPhotos,
-              query,
-              (event) => {
-                // Stream vision progress events
-                sendSSE(controller, "vision_progress", {
-                  type: event.type,
-                  current: event.current,
-                  total: event.total,
-                  message: event.message,
-                  educational: event.educational,
-                })
-              }
-            )
+            if (photosToValidate.length > 0) {
+              sendSSE(controller, "progress", {
+                stage: "vision_start",
+                message: `Validating top ${photosToValidate.length} photos with GPT Vision...`,
+                educational: "Using AI to verify the most relevant images match your description",
+              })
 
-            photos = visionFilteredPhotos
+              // Apply vision reasoning only to top N photos with progress callback
+              const visionFilteredPhotos = await reRankWithVisionReasoning(
+                photosToValidate,
+                query,
+                (event) => {
+                  // Stream vision progress events
+                  sendSSE(controller, "vision_progress", {
+                    type: event.type,
+                    current: event.current,
+                    total: event.total,
+                    message: event.message,
+                    educational: event.educational,
+                  })
+                }
+              )
+
+              // Combine validated photos + remaining unvalidated photos
+              // Validated photos go first (they're the most relevant and AI-verified)
+              photos = [...visionFilteredPhotos, ...photosToSkip]
+
+              console.log(`[Vision] Validated ${visionFilteredPhotos.length}/${enhancedPhotos.length} photos (skipped ${photosToSkip.length})`)
+            } else {
+              photos = enhancedPhotos
+            }
           } else {
             photos = enhancedPhotos
           }
