@@ -72,21 +72,15 @@ export async function POST(request: Request) {
       photoCount: photoIds.length,
     })
 
-    // Get cover photo URL for the album
-    const { data: coverPhoto } = await supabase
-      .from("photos")
-      .select("file_url")
-      .eq("id", coverPhotoId || photoIds[0])
-      .single()
-
     // Create album directly in database (no need for n8n webhook)
     const { data: album, error: albumError } = await supabase
       .from("albums")
       .insert({
         user_id: user.id,
-        name: albumTitle, // Using 'name' column (check if it exists, might need to be 'title')
+        album_title: albumTitle,
         description: description || null,
-        cover_image_url: coverPhoto?.file_url || null,
+        photos: photoIds.map(String),
+        cover_image_url: String(coverPhotoId || photoIds[0]),
         photo_count: photoIds.length,
         status: 'active',
         processing_status: 'completed',
