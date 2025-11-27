@@ -1,4 +1,4 @@
-import type { NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
   // Backend API server - no session management needed
