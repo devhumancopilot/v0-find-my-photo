@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { ArrowLeft, Printer, Grid3x3, Grid2x2, LayoutGrid, Image as ImageIcon, Package, ZoomIn, ZoomOut, Download, Loader2 } from "lucide-react"
 import { PrintOrderDialog } from "@/components/print-order-dialog"
 import { toast } from "sonner"
+import { createClient } from "@/lib/supabase/client"
 
 interface Photo {
   id: number
@@ -650,12 +651,15 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
       console.log('[PDF] Using API URL:', apiUrl)
 
       // Get Supabase access token for cross-origin auth
+      const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       const accessToken = session?.access_token
 
       if (!accessToken) {
         throw new Error('Not authenticated. Please sign in again.')
       }
+
+      console.log('[PDF] Using access token for auth')
 
       // Use WYSIWYG endpoint that navigates to actual preview page (TRUE "what you see is what you get")
       const response = await fetch(apiUrl, {
