@@ -9,7 +9,7 @@ services:
     rootDir: backend
     buildCommand: |
       export NODE_OPTIONS="--max-old-space-size=350"
-      pnpm install --frozen-lockfile
+      pnpm install
       pnpm run build
     startCommand: |
       export NODE_OPTIONS="--max-old-space-size=400"
@@ -51,7 +51,7 @@ services:
     branch: main
     buildCommand: |
       export NODE_OPTIONS="--max-old-space-size=300"
-      pnpm install --frozen-lockfile
+      pnpm install
       pnpm run build
     startCommand: pnpm start
     envVars:
