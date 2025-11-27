@@ -643,9 +643,16 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
 
       console.log('[PDF] Calling WYSIWYG Puppeteer API endpoint...')
 
+      // Call backend directly to avoid proxy timeout with large PDF files
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || ''
+      const apiUrl = backendUrl ? `${backendUrl}/api/album/${albumId}/generate-pdf` : `/api/album/${albumId}/generate-pdf`
+
+      console.log('[PDF] Using API URL:', apiUrl)
+
       // Use WYSIWYG endpoint that navigates to actual preview page (TRUE "what you see is what you get")
-      const response = await fetch(`/api/album/${albumId}/generate-pdf`, {
+      const response = await fetch(apiUrl, {
         signal: AbortSignal.timeout(120000), // 2 minute timeout
+        credentials: 'include', // Include cookies for auth
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -660,14 +667,19 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
       if (!response.ok) {
         // Try to parse JSON error, fallback to text if not JSON
         let errorMessage = 'Failed to generate PDF'
+        const responseClone = response.clone() // Clone so we can read twice
         try {
           const error = await response.json()
           errorMessage = error.error || error.message || errorMessage
         } catch (e) {
           // Response is not JSON (might be HTML error page or timeout)
-          const text = await response.text()
-          console.error('[PDF] Non-JSON error response:', text.substring(0, 200))
-          errorMessage = `Server error (${response.status}): ${text.substring(0, 100)}`
+          try {
+            const text = await responseClone.text()
+            console.error('[PDF] Non-JSON error response:', text.substring(0, 200))
+            errorMessage = `Server error (${response.status}): ${text.substring(0, 100)}`
+          } catch (e2) {
+            console.error('[PDF] Could not read error response:', e2)
+          }
         }
         throw new Error(errorMessage)
       }
