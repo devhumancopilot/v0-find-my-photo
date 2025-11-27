@@ -1,0 +1,76 @@
+services:
+  # Main Next.js Web Service
+  - type: web
+    name: findmyphoto
+    runtime: node
+    region: oregon  # Change to your preferred region (oregon, frankfurt, singapore, etc.)
+    plan: free      # Free tier - NOTE: Service sleeps after 15min inactivity (30-60s wake time)
+    branch: main
+    buildCommand: pnpm install && pnpm run build
+    startCommand: pnpm start
+    envVars:
+      # Next.js
+      - key: NODE_ENV
+        value: production
+
+      # Supabase Configuration
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false  # You'll add this in Render dashboard
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL
+        sync: false
+
+      # Google OAuth & Photos API
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false
+      - key: NEXT_PUBLIC_GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # OpenAI API
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # Embedding Configuration
+      - key: EMBEDDING_PROVIDER
+        value: huggingface
+      - key: VARIABLE_EMBEDDING_DIMENSIONS
+        value: true
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: HUGGINGFACE_CLIP_ENDPOINT
+        sync: false
+
+      # Photo Search Configuration
+      - key: PHOTO_SEARCH_MIN_SIMILARITY
+        value: 0.4
+      - key: STORE_BASE64_IN_DB
+        value: false
+
+      # Vision Reasoning Configuration
+      - key: ENABLE_VISION_RERANKING
+        value: true
+      - key: VISION_MAX_PHOTOS
+        value: 30  # Conservative for free tier (can increase if needed)
+      - key: VISION_MIN_CONFIDENCE
+        value: 60
+      - key: VISION_RERANKING_WEIGHT
+        value: 0.4
+
+      # CLIP Re-ranking
+      - key: CLIP_MIN_SCORE
+        value: 0.20
+      - key: CLIP_REFERENCE_WEIGHT
+        value: 0.5
+      - key: CLIP_NUM_REFERENCES
+        value: 3
+
+    # Health check
+    healthCheckPath: /
+
+    # Auto-deploy on git push
+    autoDeploy: true
