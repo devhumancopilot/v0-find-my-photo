@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server"
-import { triggerWebhook } from "@/lib/webhooks"
 import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
@@ -80,27 +79,55 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString(),
     }
 
-    console.log("[v0] Triggering album finalization webhook:", {
+    console.log("[v0] Creating album directly in database:", {
       userId: user.id,
       albumTitle,
       photoCount: photoIds.length,
     })
 
-    // Trigger n8n webhook - n8n will create album and link photos
-    const webhookResult = await triggerWebhook(process.env.N8N_WEBHOOK_ALBUM_FINALIZED, n8nPayload)
+    // Create album directly in database (no need for n8n webhook)
+    const { data: album, error: albumError } = await supabase
+      .from("albums")
+      .insert({
+        user_id: user.id,
+        title: albumTitle,
+        description: description || null,
+        cover_photo_id: coverPhotoId || photoIds[0],
+      })
+      .select()
+      .single()
 
-    if (!webhookResult.success) {
-      console.error("[v0] n8n webhook failed:", webhookResult.error)
+    if (albumError || !album) {
+      console.error("[v0] Failed to create album:", albumError)
       return NextResponse.json(
         { error: "Failed to create album. Please try again." },
         { status: 500 }
       )
     }
 
+    console.log("[v0] ✓ Album created:", album.id)
+
+    // Link photos to album
+    const albumPhotos = photoIds.map(photoId => ({
+      album_id: album.id,
+      photo_id: photoId,
+    }))
+
+    const { error: linkError } = await supabase
+      .from("album_photos")
+      .insert(albumPhotos)
+
+    if (linkError) {
+      console.error("[v0] Failed to link photos to album:", linkError)
+      // Album was created but photos weren't linked - not critical
+      // User can still add photos later
+    } else {
+      console.log("[v0] ✓ Linked", photoIds.length, "photos to album")
+    }
+
     return NextResponse.json({
       success: true,
-      albumId: webhookResult.data?.albumId || null,
-      webhookTriggered: true,
+      albumId: album.id,
       message: "Album created successfully",
     })
   } catch (error) {
