@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Frontend Configuration (proxies API calls to separate backend)
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -10,17 +11,28 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  // Memory optimizations for Render Free tier (512MB limit)
+  // Proxy all /api/* requests to backend server
+  async rewrites() {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
+      },
+    ]
+  },
+
+  // Memory optimizations
   experimental: {
-    // Reduce memory usage during builds
     workerThreads: false,
     cpus: 1,
   },
 
-  // Use standalone output for smaller deployment size
+  // Use standalone output
   output: 'standalone',
 
-  // Disable source maps in production to save memory
+  // Disable source maps in production
   productionBrowserSourceMaps: false,
 
   // Optimize bundle
@@ -28,13 +40,11 @@ const nextConfig = {
 
   // Reduce webpack memory usage
   webpack: (config, { isServer }) => {
-    // Optimize memory during build
     config.optimization = {
       ...config.optimization,
       moduleIds: 'deterministic',
     }
 
-    // Reduce memory footprint
     if (isServer) {
       config.cache = false
     }

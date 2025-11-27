@@ -1,0 +1,74 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Backend API server configuration
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+
+  // Memory optimizations for Render Free tier (512MB)
+  experimental: {
+    workerThreads: false,
+    cpus: 1,
+  },
+
+  // Standalone output for deployment
+  output: 'standalone',
+
+  // No source maps to save memory
+  productionBrowserSourceMaps: false,
+
+  // Optimize bundle
+  swcMinify: true,
+
+  // CORS headers for frontend access
+  async headers() {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      'https://v0-find-my-photo.onrender.com',
+      'http://localhost:3000', // For local development
+    ].filter(Boolean)
+
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Credentials',
+            value: 'true',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: allowedOrigins.join(','),
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
+          },
+        ],
+      },
+    ]
+  },
+
+  // Webpack optimization
+  webpack: (config, { isServer }) => {
+    config.optimization = {
+      ...config.optimization,
+      moduleIds: 'deterministic',
+    }
+
+    if (isServer) {
+      config.cache = false
+    }
+
+    return config
+  },
+}
+
+export default nextConfig
