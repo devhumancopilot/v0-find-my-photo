@@ -137,12 +137,18 @@ importers:
       geist:
         specifier: latest
         version: 1.5.1(next@15.2.4(@babel/core@7.28.5)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))
+      html2canvas:
+        specifier: ^1.4.1
+        version: 1.4.1
       html2pdf.js:
         specifier: ^0.12.1
         version: 0.12.1
       input-otp:
         specifier: 1.4.1
         version: 1.4.1(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      jspdf:
+        specifier: ^3.0.4
+        version: 3.0.4
       lucide-react:
         specifier: ^0.454.0
         version: 0.454.0(react@19.0.0)
