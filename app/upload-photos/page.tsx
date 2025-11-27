@@ -265,11 +265,12 @@ export default function UploadPhotosPage() {
     try {
       let result;
 
-      // Use Supabase chunked upload for client-side uploads (bypasses timeout limit)
-      console.log('[Upload] Using Supabase chunked upload (client-side direct upload)')
+      // Use backend API upload (goes through separated backend server)
+      console.log('[Upload] Using backend API upload via /api/photos/upload')
 
-      result = await uploadPhotosWithSupabaseChunked(
+      result = await uploadPhotosWithFormData(
         allFiles,
+        googlePhotos,
         (current, total, progress) => {
           setCurrentUploadingPhoto(current)
           setUploadProgress(progress)
