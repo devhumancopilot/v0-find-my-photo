@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       try {
         // Send initial event
         sendSSE(controller, "start", {
-          message: "Starting photo search...",
+          message: "Let's find your perfect photos!",
           userId: user.id,
           searchType: query ? "text" : "image",
         })
@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
 
         sendSSE(controller, "progress", {
           stage: "embedding",
-          message: "Generating embeddings...",
-          educational: "Converting your search into a mathematical representation that machines can understand",
+          message: "Understanding what you're looking for...",
+          educational: "Converting your search into AI language",
         })
 
         let allPhotos: any[]
@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
 
           sendSSE(controller, "progress", {
             stage: "search",
-            message: "Searching your photo library...",
-            educational: "Using CLIP multi-modal embeddings to find visually similar images",
+            message: "Scanning through your photo collection...",
+            educational: "Using AI to match visual content with your description",
           })
 
           const MIN_CLIP_SCORE = parseFloat(process.env.CLIP_MIN_SCORE || "0.20")
@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
 
         sendSSE(controller, "progress", {
           stage: "filtering",
-          message: `Found ${allPhotos.length} initial matches`,
-          educational: "Applying similarity threshold to filter results",
+          message: `Great! Found ${allPhotos.length} matching photo${allPhotos.length === 1 ? '' : 's'}`,
+          educational: "Filtering the best matches for you",
         })
 
         // Filter by minimum similarity
@@ -131,8 +131,8 @@ export async function POST(request: NextRequest) {
 
         sendSSE(controller, "progress", {
           stage: "enhancing",
-          message: `Enhancing ${filteredPhotos.length} photos...`,
-          educational: "Applying multi-signal ranking: recency, favorites, temporal relevance",
+          message: `Ranking your top ${filteredPhotos.length} photo${filteredPhotos.length === 1 ? '' : 's'}...`,
+          educational: "Organizing by relevance, recency, and your favorites",
         })
 
         let photos: any[] = filteredPhotos
@@ -165,8 +165,8 @@ export async function POST(request: NextRequest) {
             if (photosToValidate.length > 0) {
               sendSSE(controller, "progress", {
                 stage: "vision_start",
-                message: `Validating top ${photosToValidate.length} photos with GPT Vision...`,
-                educational: "Using AI to verify the most relevant images match your description",
+                message: `Almost there! Checking ${photosToValidate.length} photo${photosToValidate.length === 1 ? '' : 's'} with AI vision...`,
+                educational: "Using advanced AI to ensure the best matches",
               })
 
               // Apply vision reasoning only to top N photos with progress callback
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
         // Verify photo ownership (security)
         sendSSE(controller, "progress", {
           stage: "verification",
-          message: "Verifying photo ownership...",
+          message: "Just finishing up...",
         })
 
         const photoIds = photos.map((p: any) => p.id).filter(Boolean)
