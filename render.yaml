@@ -6,8 +6,15 @@ services:
     region: oregon  # Change to your preferred region (oregon, frankfurt, singapore, etc.)
     plan: free      # Free tier - NOTE: Service sleeps after 15min inactivity (30-60s wake time)
     branch: main
-    buildCommand: pnpm install && pnpm run build
-    startCommand: pnpm start
+    buildCommand: |
+      # Set Node.js memory limit for build (350MB out of 512MB available)
+      export NODE_OPTIONS="--max-old-space-size=350"
+      pnpm install --frozen-lockfile
+      pnpm run build
+    startCommand: |
+      # Set Node.js memory limit for runtime (400MB, leaving 112MB buffer)
+      export NODE_OPTIONS="--max-old-space-size=400"
+      pnpm start
     envVars:
       # Next.js
       - key: NODE_ENV
@@ -55,7 +62,7 @@ services:
       - key: ENABLE_VISION_RERANKING
         value: true
       - key: VISION_MAX_PHOTOS
-        value: 30  # Conservative for free tier (can increase if needed)
+        value: 15  # Reduced for 512MB memory limit (prevents OOM)
       - key: VISION_MIN_CONFIDENCE
         value: 60
       - key: VISION_RERANKING_WEIGHT
