@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,38 +40,43 @@ export default function CreateAlbumPage() {
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
 
+  // Watch for search results and auto-advance to step 2
+  useEffect(() => {
+    if (searchResult && searchResult.photos && Array.isArray(searchResult.photos)) {
+      console.log("[v0] ✅ Search complete! Setting suggested photos:", searchResult.photos.length)
+      setSuggestedPhotos(searchResult.photos)
+
+      // Auto-select all photos by default
+      const photoIds = searchResult.photos.map((photo: SuggestedPhoto) => photo.id)
+      console.log("[v0] Auto-selecting photo IDs:", photoIds)
+      setSelectedPhotos(photoIds)
+
+      if (searchResult.photos.length === 0) {
+        console.warn("[v0] ⚠️ No photos returned from search")
+        alert("No matching photos found. Try a different search query.")
+      } else {
+        console.log("[v0] Moving to step 2")
+        setCurrentStep(2)
+      }
+    }
+  }, [searchResult]) // Re-run when searchResult changes
+
+  // Watch for search errors
+  useEffect(() => {
+    if (searchError) {
+      console.error("[v0] ❌ Search error:", searchError)
+      alert("Failed to find photos: " + searchError)
+    }
+  }, [searchError])
+
   const handleNext = async () => {
     if (currentStep === 1) {
       // Trigger AI semantic search via streaming API
-      try {
-        await startSearch({
-          query: albumDescription,
-          albumTitle: albumTitle,
-        })
-
-        // Check for results
-        if (searchResult && searchResult.photos && Array.isArray(searchResult.photos)) {
-          console.log("[v0] ✅ Setting suggested photos:", searchResult.photos.length)
-          setSuggestedPhotos(searchResult.photos)
-          // Auto-select all photos by default
-          const photoIds = searchResult.photos.map((photo: SuggestedPhoto) => photo.id)
-          console.log("[v0] Auto-selecting photo IDs:", photoIds)
-          setSelectedPhotos(photoIds)
-
-          if (searchResult.photos.length === 0) {
-            console.warn("[v0] ⚠️ No photos returned from search")
-            alert("No matching photos found. Try a different search query.")
-          } else {
-            setCurrentStep(2)
-          }
-        } else if (searchError) {
-          console.error("[v0] ❌ Search error:", searchError)
-          alert("Failed to find photos: " + searchError)
-        }
-      } catch (error) {
-        console.error("[v0] Album request error:", error)
-        alert("Failed to process request. Please try again.")
-      }
+      // Results will be handled by useEffect when searchResult updates
+      await startSearch({
+        query: albumDescription,
+        albumTitle: albumTitle,
+      })
     } else if (currentStep === 2) {
       // Move from Step 2 to Step 3
       setCurrentStep(3)
