@@ -57,9 +57,8 @@ export async function POST(
       )
     }
 
-    // Get the base URL from the request
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-                    `${request.nextUrl.protocol}//${request.nextUrl.host}`
+    // Get the base URL from the request (automatically works in dev and production)
+    const baseUrl = `${request.nextUrl.protocol}//${request.nextUrl.host}`
 
     console.log(`[PDF Generator] Using base URL: ${baseUrl}`)
 
