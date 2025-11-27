@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card"
 import { ArrowLeft, Printer, Grid3x3, Grid2x2, LayoutGrid, Image as ImageIcon, Package, ZoomIn, ZoomOut, Download, Loader2 } from "lucide-react"
 import { PrintOrderDialog } from "@/components/print-order-dialog"
 import { toast } from "sonner"
-import { createClient } from "@/lib/supabase/client"
+import html2canvas from "html2canvas"
+import jsPDF from "jspdf"
 
 interface Photo {
   id: number
@@ -639,80 +640,68 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
 
     try {
       toast.info('Generating PDF', {
-        description: 'Please wait while we create your high-quality album PDF with Puppeteer...',
+        description: 'Please wait while we create your high-quality album PDF...',
       })
 
-      console.log('[PDF] Calling WYSIWYG Puppeteer API endpoint...')
+      console.log('[PDF] Starting client-side PDF generation...')
 
-      // Call backend directly to avoid proxy timeout with large PDF files
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || ''
-      const apiUrl = backendUrl ? `${backendUrl}/api/album/${albumId}/generate-pdf` : `/api/album/${albumId}/generate-pdf`
+      // Get all print-page elements
+      const pageElements = document.querySelectorAll('.print-page')
 
-      console.log('[PDF] Using API URL:', apiUrl)
-
-      // Get Supabase access token for cross-origin auth
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const accessToken = session?.access_token
-
-      if (!accessToken) {
-        throw new Error('Not authenticated. Please sign in again.')
+      if (pageElements.length === 0) {
+        throw new Error('No pages found to convert to PDF')
       }
 
-      console.log('[PDF] Using access token for auth')
+      console.log(`[PDF] Found ${pageElements.length} pages to screenshot`)
 
-      // Use WYSIWYG endpoint that navigates to actual preview page (TRUE "what you see is what you get")
-      const response = await fetch(apiUrl, {
-        signal: AbortSignal.timeout(120000), // 2 minute timeout
-        credentials: 'include', // Include cookies for auth
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`, // Add auth token for cross-origin requests
-        },
-        body: JSON.stringify({
-          layoutTemplate: selectedTemplate,
-        }),
+      // Create PDF with letter size (8.5" x 11" = 612 x 792 points at 72 DPI)
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'letter',
       })
 
-      console.log('[PDF] Response status:', response.status, 'Content-Type:', response.headers.get('content-type'))
+      // Process each page
+      for (let i = 0; i < pageElements.length; i++) {
+        const pageElement = pageElements[i] as HTMLElement
 
-      if (!response.ok) {
-        // Try to parse JSON error, fallback to text if not JSON
-        let errorMessage = 'Failed to generate PDF'
-        const responseClone = response.clone() // Clone so we can read twice
-        try {
-          const error = await response.json()
-          errorMessage = error.error || error.message || errorMessage
-        } catch (e) {
-          // Response is not JSON (might be HTML error page or timeout)
-          try {
-            const text = await responseClone.text()
-            console.error('[PDF] Non-JSON error response:', text.substring(0, 200))
-            errorMessage = `Server error (${response.status}): ${text.substring(0, 100)}`
-          } catch (e2) {
-            console.error('[PDF] Could not read error response:', e2)
-          }
+        console.log(`[PDF] Screenshotting page ${i + 1}/${pageElements.length}...`)
+
+        // Update toast to show progress
+        toast.info('Generating PDF', {
+          description: `Processing page ${i + 1} of ${pageElements.length}...`,
+        })
+
+        // Screenshot the page element
+        const canvas = await html2canvas(pageElement, {
+          scale: 2, // 2x scale for better quality
+          useCORS: true, // Allow cross-origin images
+          logging: false,
+          backgroundColor: '#ffffff',
+        })
+
+        // Convert canvas to image
+        const imgData = canvas.toDataURL('image/jpeg', 0.95)
+
+        // Calculate dimensions to fit letter size (maintain aspect ratio)
+        const pdfWidth = 612 // Letter width in points
+        const pdfHeight = 792 // Letter height in points
+
+        // Add image to PDF
+        if (i > 0) {
+          pdf.addPage()
         }
-        throw new Error(errorMessage)
+
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight)
+
+        console.log(`[PDF] Page ${i + 1} added to PDF`)
       }
 
-      console.log('[PDF] PDF generated successfully, downloading...')
+      // Save the PDF
+      const fileName = `${albumTitle.replace(/[^a-z0-9]/gi, '_')}_${selectedTemplate}.pdf`
+      pdf.save(fileName)
 
-      // Get the PDF blob from the response
-      const blob = await response.blob()
-
-      // Create a download link
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${albumTitle.replace(/[^a-z0-9]/gi, '_')}_${selectedTemplate}.pdf`
-      document.body.appendChild(a)
-      a.click()
-
-      // Cleanup
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      console.log('[PDF] PDF downloaded successfully')
 
       toast.success('PDF Downloaded', {
         description: 'Your album PDF has been downloaded with full styling!',

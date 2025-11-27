@@ -83,27 +83,11 @@ export async function POST(
       )
     }
 
-    // Get the base URL from the request, checking forwarded headers for production (Render)
-    // Render and other hosts use X-Forwarded-Proto and X-Forwarded-Host for the original request
-    const forwardedProto = request.headers.get('x-forwarded-proto')
-    const forwardedHost = request.headers.get('x-forwarded-host')
-
-    let protocol = forwardedProto || request.nextUrl.protocol
-    let host = forwardedHost || request.nextUrl.host
-
-    // If we're still getting localhost in production, use the known Render URL as fallback
-    if (host.includes('localhost') && process.env.NODE_ENV === 'production') {
-      protocol = 'https'
-      host = 'v0-find-my-photo-v2.onrender.com'  // Frontend URL
-      console.log(`[PDF Generator] Detected localhost in production, using fallback URL`)
-    }
-
-    // Remove trailing colon from protocol if present
-    const cleanProtocol = protocol.replace(/:$/, '')
-    const baseUrl = `${cleanProtocol}://${host}`
+    // Use frontend URL for puppeteer navigation since the print preview page lives on the frontend
+    // Use FRONTEND_URL env var, fallback to production frontend URL
+    const baseUrl = process.env.FRONTEND_URL || 'https://v0-find-my-photo-v2.onrender.com'
 
     console.log(`[PDF Generator] Using base URL: ${baseUrl}`)
-    console.log(`[PDF Generator] Forwarded headers: proto=${forwardedProto}, host=${forwardedHost}`)
 
     // Extract cookies from the request to pass to Puppeteer for authentication
     const cookieHeader = request.headers.get('cookie')
