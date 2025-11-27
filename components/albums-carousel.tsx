@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { AlbumCard } from "@/components/album-card"
-import { FolderOpen } from "lucide-react"
+import { FolderOpen, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
@@ -23,182 +23,14 @@ interface AlbumsCarouselProps {
 }
 
 export function AlbumsCarousel({ albums, isLoading = false }: AlbumsCarouselProps) {
-  const [isPaused, setIsPaused] = useState(false)
-  const [countdown, setCountdown] = useState<number | null>(null)
-  const [centeredAlbumIndex, setCenteredAlbumIndex] = useState<number>(0)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [albumScales, setAlbumScales] = useState<Record<number, number>>({})
-  const animationFrameRef = useRef<number | undefined>(undefined)
-  const resumeTimeoutRef = useRef<number | undefined>(undefined)
-  const countdownIntervalRef = useRef<number | undefined>(undefined)
+  const [currentIndex, setCurrentIndex] = useState(0)
 
-  // Calculate scale based on position
-  const updateAlbumScales = () => {
-    if (!scrollRef.current || !containerRef.current) return
-
-    const container = containerRef.current
-    const containerRect = container.getBoundingClientRect()
-    const containerCenter = containerRect.left + containerRect.width / 2
-
-    const albumElements = scrollRef.current.querySelectorAll('.album-card')
-    const newScales: Record<number, number> = {}
-    let closestIndex = 0
-    let closestDistance = Infinity
-
-    albumElements.forEach((album, index) => {
-      const albumRect = album.getBoundingClientRect()
-      const albumCenter = albumRect.left + albumRect.width / 2
-
-      // Calculate distance from center (0 = perfect center, increases as it moves away)
-      const distance = Math.abs(containerCenter - albumCenter)
-      const maxDistance = containerRect.width / 2 // Half viewport width
-
-      // Track which album is closest to center
-      if (distance < closestDistance) {
-        closestDistance = distance
-        closestIndex = index
-      }
-
-      // Calculate scale: 1.0 at center, 0.75 at edges
-      const normalizedDistance = Math.min(distance / maxDistance, 1)
-      const scale = 1.0 - (normalizedDistance * 0.25) // Scale from 1.0 to 0.75
-
-      // Calculate opacity: 1.0 at center, 0.6 at edges
-      const opacity = 1.0 - (normalizedDistance * 0.4) // Opacity from 1.0 to 0.6
-
-      newScales[index] = scale
-
-      // Apply the transform directly for smoother animation
-      const element = album as HTMLElement
-      element.style.transform = `scale(${scale})`
-      element.style.opacity = opacity.toString()
-    })
-
-    setAlbumScales(newScales)
-    // Update centered album index (map back to original album index)
-    setCenteredAlbumIndex(closestIndex % albums.length)
+  const handlePrevious = () => {
+    setCurrentIndex((prev) => (prev === 0 ? albums.length - 1 : prev - 1))
   }
 
-  // Update scales on animation frame
-  useEffect(() => {
-    const animate = () => {
-      updateAlbumScales()
-      animationFrameRef.current = requestAnimationFrame(animate)
-    }
-
-    animationFrameRef.current = requestAnimationFrame(animate)
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      if (resumeTimeoutRef.current) {
-        window.clearTimeout(resumeTimeoutRef.current)
-      }
-      if (countdownIntervalRef.current) {
-        window.clearInterval(countdownIntervalRef.current)
-      }
-    }
-  }, [albums.length])
-
-  const handleAlbumClick = (index: number, e: React.MouseEvent) => {
-    // Don't do anything if clicking on buttons or links
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) {
-      return
-    }
-
-    if (!scrollRef.current || !containerRef.current) return
-
-    // Get the clicked album element
-    const albumElements = scrollRef.current.querySelectorAll('.album-card')
-    const clickedElement = albumElements[index] as HTMLElement
-    if (!clickedElement) return
-
-    // Pause animation
-    setIsPaused(true)
-    setCountdown(5)
-
-    // Start countdown timer
-    if (countdownIntervalRef.current) {
-      window.clearInterval(countdownIntervalRef.current)
-    }
-    countdownIntervalRef.current = window.setInterval(() => {
-      setCountdown((prev) => {
-        if (prev === null || prev <= 1) {
-          if (countdownIntervalRef.current) {
-            window.clearInterval(countdownIntervalRef.current)
-          }
-          return null
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    // Calculate the offset needed to center the clicked album
-    const containerRect = containerRef.current.getBoundingClientRect()
-    const albumRect = clickedElement.getBoundingClientRect()
-    const containerCenter = containerRect.left + containerRect.width / 2
-    const albumCenter = albumRect.left + albumRect.width / 2
-    const offsetNeeded = containerCenter - albumCenter
-
-    // Get current transform and add the centering offset
-    const currentTransform = window.getComputedStyle(scrollRef.current).transform
-    let currentX = 0
-
-    if (currentTransform && currentTransform !== 'none') {
-      const matrix = currentTransform.match(/matrix\((.+)\)/)
-      if (matrix) {
-        const values = matrix[1].split(', ')
-        currentX = parseFloat(values[4]) || 0
-      }
-    }
-
-    // Apply the new transform to center the album
-    scrollRef.current.style.transform = `translateX(${currentX + offsetNeeded}px)`
-    scrollRef.current.style.transition = 'transform 0.5s ease-out'
-
-    // Clear any existing timeout
-    if (resumeTimeoutRef.current) {
-      window.clearTimeout(resumeTimeoutRef.current)
-    }
-
-    // Auto-resume after 5 seconds
-    resumeTimeoutRef.current = window.setTimeout(() => {
-      setCountdown(null)
-      if (scrollRef.current) {
-        // Get the current transform position
-        const currentTransform = window.getComputedStyle(scrollRef.current).transform
-        let currentX = 0
-
-        if (currentTransform && currentTransform !== 'none') {
-          const matrix = currentTransform.match(/matrix\((.+)\)/)
-          if (matrix) {
-            const values = matrix[1].split(', ')
-            currentX = parseFloat(values[4]) || 0
-          }
-        }
-
-        // Calculate animation progress based on current position
-        const MIN_ITEMS_FOR_SMOOTH_ANIMATION = 30
-        const SECONDS_PER_ITEM = 4  // Consistent speed
-        const animationItemCount = Math.max(albums.length, MIN_ITEMS_FOR_SMOOTH_ANIMATION)
-        const animationDuration = animationItemCount * SECONDS_PER_ITEM
-        const totalDistance = animationItemCount * 432
-
-        // Normalize currentX to be within one animation cycle
-        // Since we have infinite loop, get position within single cycle
-        const normalizedX = ((Math.abs(currentX) % totalDistance) / totalDistance)
-
-        // Set negative animation-delay to start from current position
-        // This makes the animation continue from where we paused
-        const delay = -(normalizedX * animationDuration)
-        scrollRef.current.style.animationDelay = `${delay}s`
-        scrollRef.current.style.transition = ''
-        scrollRef.current.style.transform = '' // Remove inline transform, let animation take over
-      }
-      setIsPaused(false)
-    }, 5000)
+  const handleNext = () => {
+    setCurrentIndex((prev) => (prev === albums.length - 1 ? 0 : prev + 1))
   }
 
   // Loading state
@@ -236,95 +68,99 @@ export function AlbumsCarousel({ albums, isLoading = false }: AlbumsCarouselProp
     )
   }
 
-  // Duplicate albums to reach minimum count for smooth animation
-  // Target: ~30 items minimum for consistent smooth scrolling
-  const MIN_ITEMS_FOR_SMOOTH_ANIMATION = 30
-  const duplicateCount = Math.max(2, Math.ceil(MIN_ITEMS_FOR_SMOOTH_ANIMATION / albums.length))
-  const duplicatedAlbums = Array(duplicateCount).fill(albums).flat()
-
-  // Animation should move through at least 30 items worth of distance for smooth scrolling
-  // This ensures the same speed regardless of actual item count
-  const SECONDS_PER_ITEM = 4  // Consistent speed (same as 30+ items)
-  const animationItemCount = Math.max(albums.length, MIN_ITEMS_FOR_SMOOTH_ANIMATION)
-  const animationDuration = animationItemCount * SECONDS_PER_ITEM
-  const animationDistance = animationItemCount * 432 // Move through 30 items minimum
+  const getPreviousIndex = () => (currentIndex === 0 ? albums.length - 1 : currentIndex - 1)
+  const getNextIndex = () => (currentIndex === albums.length - 1 ? 0 : currentIndex + 1)
 
   return (
-    <>
-      <div className="relative overflow-hidden rounded-lg border border-white/20 bg-white/60 backdrop-blur-sm p-8">
-        {/* Continuous flowing carousel */}
-        <div ref={containerRef} className="relative overflow-hidden py-12">
-          <div
-            ref={scrollRef}
-            className={`flex gap-8 items-center justify-start ${isPaused ? '' : 'animate-scroll'}`}
-            style={{
-              width: 'max-content',
-              paddingLeft: 'calc(50% - 200px)',
-              paddingRight: 'calc(50% - 200px)',
-            }}
-          >
-            {duplicatedAlbums.map((album, index) => {
-              const scale = albumScales[index] || 0.75
-              const isCenter = scale > 0.9 // Consider it center if scale is > 0.9
+    <div className="relative rounded-lg border border-white/20 bg-white/60 backdrop-blur-sm p-8">
+      {/* Three Album Display */}
+      <div className="flex items-center justify-center gap-6 overflow-hidden">
+        {/* Previous Button */}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handlePrevious}
+          className="h-12 w-12 rounded-full bg-white/80 hover:bg-white flex-shrink-0 z-10"
+          disabled={albums.length <= 1}
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </Button>
 
-              return (
-                <div
-                  key={`${album.id}-${index}`}
-                  data-index={index}
-                  className="album-card flex-shrink-0 transition-all duration-300 ease-out cursor-pointer"
-                  style={{
-                    width: '400px',
-                  }}
-                  onClick={(e) => handleAlbumClick(index, e)}
-                >
-                  <AlbumCard album={album} />
-                </div>
-              )
-            })}
-          </div>
+        {/* Previous Album (faded, smaller) */}
+        <div
+          className="w-72 flex-shrink-0 cursor-pointer"
+          onClick={handlePrevious}
+          style={{
+            transform: 'scale(0.85)',
+            opacity: 0.4,
+            transition: 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.6'}
+          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
+        >
+          <AlbumCard album={albums[getPreviousIndex()]} />
         </div>
 
-        {/* Indicators */}
-        <div className="mt-6 flex justify-center gap-2 flex-wrap px-4">
-          {albums.map((_, index) => (
-            <div
-              key={index}
-              className={`h-2.5 rounded-full transition-all duration-300 ${
-                index === centeredAlbumIndex
-                  ? "w-8 bg-gradient-to-r from-blue-600 to-purple-600"
-                  : "w-2.5 bg-gray-300"
-              }`}
-            />
-          ))}
+        {/* Center Album (highlighted, largest) */}
+        <div
+          className="w-96 flex-shrink-0 shadow-2xl"
+          style={{
+            transform: 'scale(1)',
+            opacity: 1,
+            transition: 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          }}
+        >
+          <AlbumCard album={albums[currentIndex]} />
         </div>
 
-        {/* Album count indicator */}
-        <div className="mt-4 text-center">
-          <p className="text-sm text-muted-foreground">
-            {centeredAlbumIndex + 1} / {albums.length}
-            {isPaused && countdown !== null && (
-              <span className="ml-2 text-blue-600 font-medium">
-                (Paused - Resumes in {countdown}s)
-              </span>
-            )}
-          </p>
+        {/* Next Album (faded, smaller) */}
+        <div
+          className="w-72 flex-shrink-0 cursor-pointer"
+          onClick={handleNext}
+          style={{
+            transform: 'scale(0.85)',
+            opacity: 0.4,
+            transition: 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.6'}
+          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
+        >
+          <AlbumCard album={albums[getNextIndex()]} />
         </div>
+
+        {/* Next Button */}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handleNext}
+          className="h-12 w-12 rounded-full bg-white/80 hover:bg-white flex-shrink-0 z-10"
+          disabled={albums.length <= 1}
+        >
+          <ChevronRight className="h-6 w-6" />
+        </Button>
       </div>
 
-      <style jsx>{`
-        @keyframes scroll {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(calc(-${animationDistance}px));
-          }
-        }
+      {/* Indicators */}
+      <div className="mt-6 flex justify-center gap-2 flex-wrap px-4">
+        {albums.map((_, index) => (
+          <button
+            key={index}
+            onClick={() => setCurrentIndex(index)}
+            className={`h-2.5 rounded-full transition-all duration-300 ${
+              index === currentIndex
+                ? "w-8 bg-gradient-to-r from-blue-600 to-purple-600"
+                : "w-2.5 bg-gray-300 hover:bg-gray-400"
+            }`}
+          />
+        ))}
+      </div>
 
-        .animate-scroll {
-          animation: scroll ${animationDuration}s linear infinite;
-        }
-      `}</style>
-    </>
+      {/* Album count indicator */}
+      <div className="mt-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          {currentIndex + 1} / {albums.length}
+        </p>
+      </div>
+    </div>
   )
 }

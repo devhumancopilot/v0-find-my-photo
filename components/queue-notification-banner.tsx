@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Sparkles, X } from "lucide-react"
+import { Sparkles, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
@@ -13,27 +13,26 @@ interface QueueNotificationBannerProps {
 }
 
 // Configuration for auto-retry behavior
-const MAX_CONSECUTIVE_FAILURES = 3 // Stop after 3 consecutive batch failures
-const MAX_TOTAL_BATCHES = 50 // Safety limit: stop after 50 batches (handles up to 150 photos with batch size 3)
-const INITIAL_RETRY_DELAY = 1000 // 1 second
-const MAX_RETRY_DELAY = 10000 // 10 seconds max
-const REQUEST_TIMEOUT = 290000 // 290 seconds (slightly less than Vercel's 300s to allow cleanup)
-const POLL_INTERVAL = 3000 // Poll every 3 seconds for queue status updates
+const MAX_CONSECUTIVE_FAILURES = 3
+const MAX_TOTAL_BATCHES = 50
+const INITIAL_RETRY_DELAY = 1000
+const MAX_RETRY_DELAY = 10000
+const REQUEST_TIMEOUT = 290000
 
 export function QueueNotificationBanner({ pendingCount, processingCount }: QueueNotificationBannerProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
-  const [totalProcessed, setTotalProcessed] = useState(0)
   const [batchCount, setBatchCount] = useState(0)
   const [consecutiveFailures, setConsecutiveFailures] = useState(0)
 
-  // Real-time queue counts (updated via polling)
+  // Real-time queue counts
   const [currentPendingCount, setCurrentPendingCount] = useState(pendingCount)
   const [currentProcessingCount, setCurrentProcessingCount] = useState(processingCount)
 
   const router = useRouter()
   const abortControllerRef = useRef<AbortController | null>(null)
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const hasAutoStartedRef = useRef(false)
 
   // Update current counts when props change
   useEffect(() => {
@@ -41,54 +40,94 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
     setCurrentProcessingCount(processingCount)
   }, [pendingCount, processingCount])
 
-  // Fetch current queue status from API
-  const fetchQueueStatus = async () => {
-    try {
-      const response = await fetch('/api/photos/queue-status')
-      if (!response.ok) {
-        console.error('[Queue Banner] Failed to fetch queue status:', response.statusText)
-        return
-      }
-
-      const data = await response.json()
-      if (data.success) {
-        setCurrentPendingCount(data.pending_count)
-        setCurrentProcessingCount(data.processing_count)
-        console.log(`[Queue Banner] Status updated: ${data.pending_count} pending, ${data.processing_count} processing`)
-      }
-    } catch (error) {
-      console.error('[Queue Banner] Error fetching queue status:', error)
-    }
-  }
-
-  // Start/stop polling based on processing state
+  // Auto-start processing when photos are uploaded
   useEffect(() => {
-    // Start polling when processing begins
-    if (isProcessing) {
-      console.log('[Queue Banner] Starting status polling...')
-      pollIntervalRef.current = setInterval(fetchQueueStatus, POLL_INTERVAL)
+    const shouldAutoStart = currentPendingCount > 0 && !isProcessing && !hasAutoStartedRef.current
 
-      // Initial fetch
-      fetchQueueStatus()
+    if (shouldAutoStart) {
+      hasAutoStartedRef.current = true
+      console.log('[Queue Banner] Auto-starting processing for', currentPendingCount, 'photos')
+
+      // Small delay to ensure component is mounted
+      setTimeout(() => {
+        setIsProcessing(true)
+        setBatchCount(0)
+        setConsecutiveFailures(0)
+
+        toast.info("🎉 Your photos are uploading!", {
+          description: "We'll process them automatically. Sit back and relax!",
+          duration: 3000,
+        })
+
+        processQueue(false, 0)
+      }, 500)
+    }
+  }, [currentPendingCount])
+
+  // Start/stop SSE connection for real-time updates
+  useEffect(() => {
+    if (isProcessing) {
+      console.log('[Queue Banner] Starting SSE connection for real-time updates')
+
+      // Create EventSource connection
+      eventSourceRef.current = new EventSource('/api/photos/queue-status-stream')
+
+      eventSourceRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          console.log('[Queue Banner] SSE update:', data)
+
+          setCurrentPendingCount(data.pending_count)
+          setCurrentProcessingCount(data.processing_count)
+        } catch (error) {
+          console.error('[Queue Banner] Error parsing SSE data:', error)
+        }
+      }
+
+      eventSourceRef.current.onerror = (error) => {
+        console.error('[Queue Banner] SSE error:', error)
+        eventSourceRef.current?.close()
+        eventSourceRef.current = null
+      }
     } else {
-      // Stop polling when processing ends
-      if (pollIntervalRef.current) {
-        console.log('[Queue Banner] Stopping status polling')
-        clearInterval(pollIntervalRef.current)
-        pollIntervalRef.current = null
+      // Close SSE connection when not processing
+      if (eventSourceRef.current) {
+        console.log('[Queue Banner] Closing SSE connection')
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
       }
     }
 
-    // Cleanup on unmount
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
-        pollIntervalRef.current = null
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
       }
     }
   }, [isProcessing])
 
-  // Don't show if no pending items or already dismissed
+  // Detect when processing is complete
+  useEffect(() => {
+    if (isProcessing && currentPendingCount === 0 && currentProcessingCount === 0) {
+      console.log('[Queue Banner] Processing complete!')
+
+      toast.success("🎉 All Done!", {
+        description: "Your photos are ready to explore!",
+        duration: 5000,
+      })
+
+      setIsProcessing(false)
+      setBatchCount(0)
+      setConsecutiveFailures(0)
+      hasAutoStartedRef.current = false
+
+      setTimeout(() => {
+        router.refresh()
+      }, 1000)
+    }
+  }, [isProcessing, currentPendingCount, currentProcessingCount, router])
+
+  // Don't show if no items or dismissed
   if ((currentPendingCount === 0 && currentProcessingCount === 0) || isDismissed) {
     return null
   }
@@ -96,42 +135,39 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
   const processQueue = async (isRetry = false, currentFailures = 0): Promise<void> => {
     const newBatchCount = batchCount + 1
 
-    // Safety check: prevent infinite loops
+    // Safety check
     if (newBatchCount > MAX_TOTAL_BATCHES) {
-      console.error(`[Queue Banner] Reached maximum batch limit (${MAX_TOTAL_BATCHES})`)
+      console.error(`[Queue Banner] Reached maximum batch limit`)
       toast.error("Processing Limit Reached", {
-        description: `Processed ${totalProcessed} photos across ${batchCount} batches. Please restart processing for remaining photos.`,
+        description: "Please restart for remaining photos.",
         duration: 7000,
       })
       setIsProcessing(false)
-      setTotalProcessed(0)
       setBatchCount(0)
       setConsecutiveFailures(0)
+      hasAutoStartedRef.current = false
       return
     }
 
     // Check consecutive failures
     if (currentFailures >= MAX_CONSECUTIVE_FAILURES) {
-      console.error(`[Queue Banner] Too many consecutive failures (${currentFailures})`)
-      toast.error("Processing Stopped", {
-        description: `Multiple failures detected. Processed ${totalProcessed} photos before stopping. Please check logs and try again.`,
+      console.error(`[Queue Banner] Too many consecutive failures`)
+      toast.error("Oops! Something went wrong", {
+        description: "Please try again.",
         duration: 7000,
       })
       setIsProcessing(false)
-      setTotalProcessed(0)
       setBatchCount(0)
       setConsecutiveFailures(0)
+      hasAutoStartedRef.current = false
       return
     }
 
     try {
-      // Create abort controller with timeout
       abortControllerRef.current = new AbortController()
       const timeoutId = setTimeout(() => {
         abortControllerRef.current?.abort()
       }, REQUEST_TIMEOUT)
-
-      console.log(`[Queue Banner] Starting batch ${newBatchCount}...`)
 
       const response = await fetch('/api/photos/process-queue', {
         method: 'POST',
@@ -150,164 +186,60 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
 
       const result = await response.json()
 
-      // Update progress
-      const newTotalProcessed = totalProcessed + result.processed_count
-      setTotalProcessed(newTotalProcessed)
+      // Update batch count
       setBatchCount(newBatchCount)
-      setConsecutiveFailures(0) // Reset on success
+      setConsecutiveFailures(0)
 
-      console.log(`[Queue Banner] Batch ${newBatchCount} complete: ${result.processed_count} processed, ${result.remaining_count} remaining`)
+      // Note: The API now self-triggers for the next photo automatically
+      // The SSE connection provides real-time status updates
+      console.log(`[Queue Banner] Initial trigger successful. API will self-trigger automatically.`)
 
-      // Show progress toast
-      if (result.has_more) {
-        toast.info("Batch Complete - Continuing...", {
-          description: `Processed ${newTotalProcessed} photos so far. ${result.remaining_count} remaining in queue. (Batch ${newBatchCount}/${MAX_TOTAL_BATCHES})`,
-          duration: 3000,
-        })
-
-        // Calculate delay with exponential backoff (helps with rate limits)
-        const delay = Math.min(
-          INITIAL_RETRY_DELAY * Math.pow(1.5, Math.min(currentFailures, 3)),
-          MAX_RETRY_DELAY
-        )
-
-        console.log(`[Queue Banner] Waiting ${delay}ms before next batch...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-
-        // Continue processing
-        await processQueue(true, 0) // Reset failures on successful batch
-      } else {
-        // All done!
-        toast.success("Processing Complete!", {
-          description: `Successfully processed ${newTotalProcessed} photo${newTotalProcessed !== 1 ? "s" : ""} across ${newBatchCount} batch${newBatchCount !== 1 ? "es" : ""}!`,
-          duration: 5000,
-        })
-
-        // Reset states
-        setIsProcessing(false)
-        setTotalProcessed(0)
-        setBatchCount(0)
-        setConsecutiveFailures(0)
-
-        // Refresh the page to update counts
-        setTimeout(() => {
-          router.refresh()
-        }, 1000)
-      }
+      // The SSE stream will detect when processing is complete
+      // (see the useEffect that monitors currentPendingCount and currentProcessingCount)
     } catch (error) {
-      // Check if it was aborted by user
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('[Queue Banner] Processing cancelled (user or timeout)')
-        toast.warning("Processing Interrupted", {
-          description: `Processed ${totalProcessed} photos before interruption. Click "Process Now" to continue.`,
+        toast.warning("Processing Paused", {
+          description: "Restart to continue.",
           duration: 5000,
         })
         setIsProcessing(false)
-        setTotalProcessed(0)
         setBatchCount(0)
         setConsecutiveFailures(0)
+        hasAutoStartedRef.current = false
         return
       }
 
-      // Handle error with retry logic
       const newFailures = currentFailures + 1
       setConsecutiveFailures(newFailures)
 
-      console.error(`[Queue Banner] Batch ${newBatchCount} failed (attempt ${newFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error)
-
       if (newFailures < MAX_CONSECUTIVE_FAILURES) {
-        // Retry with exponential backoff
         const retryDelay = Math.min(
           INITIAL_RETRY_DELAY * Math.pow(2, newFailures),
           MAX_RETRY_DELAY
         )
 
-        toast.warning(`Batch Failed - Retrying in ${retryDelay / 1000}s...`, {
-          description: `Error: ${error instanceof Error ? error.message : "Unknown error"}. Attempt ${newFailures}/${MAX_CONSECUTIVE_FAILURES}`,
-          duration: 3000,
-        })
-
-        console.log(`[Queue Banner] Retrying in ${retryDelay}ms...`)
         await new Promise(resolve => setTimeout(resolve, retryDelay))
         await processQueue(true, newFailures)
       } else {
-        // Max retries reached
         toast.error("Processing Failed", {
-          description: `Failed after ${MAX_CONSECUTIVE_FAILURES} attempts. Processed ${totalProcessed} photos. Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+          description: error instanceof Error ? error.message : "Unknown error",
           duration: 7000,
         })
 
         setIsProcessing(false)
-        setTotalProcessed(0)
         setBatchCount(0)
         setConsecutiveFailures(0)
+        hasAutoStartedRef.current = false
       }
     }
-  }
-
-  const handleProcessNow = async () => {
-    // Redirect to dashboard if not already there
-    const currentPath = window.location.pathname
-    if (currentPath !== '/dashboard') {
-      // Redirect immediately with autostart parameter
-      router.push('/dashboard?autostart=true')
-      return
-    }
-
-    setIsProcessing(true)
-    setTotalProcessed(0)
-    setBatchCount(0)
-    setConsecutiveFailures(0)
-
-    toast.info("Processing Started", {
-      description: "Processing photos in batches. This will continue automatically until all photos are processed. You can cancel anytime.",
-      duration: 3000,
-    })
-
-    await processQueue(false, 0)
-  }
-
-  // Auto-start processing if redirected with autostart parameter
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const shouldAutostart = urlParams.get('autostart') === 'true'
-
-    if (shouldAutostart && !isProcessing && currentPendingCount > 0) {
-      // Clean up URL
-      window.history.replaceState({}, '', '/dashboard')
-
-      // Start processing after a short delay to ensure component is fully mounted
-      setTimeout(() => {
-        setIsProcessing(true)
-        setTotalProcessed(0)
-        setBatchCount(0)
-        setConsecutiveFailures(0)
-
-        toast.info("Processing Started", {
-          description: "Processing photos in batches. This will continue automatically until all photos are processed. You can cancel anytime.",
-          duration: 3000,
-        })
-
-        processQueue(false, 0)
-      }, 100)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run once on mount
-
-  const handleCancelProcessing = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-    }
-    setIsProcessing(false)
-    setTotalProcessed(0)
-    setBatchCount(0)
-    setConsecutiveFailures(0)
   }
 
   const handleDismiss = () => {
     setIsDismissed(true)
   }
+
+  // Total items being processed
+  const totalItems = currentPendingCount + currentProcessingCount
 
   return (
     <Alert className="relative mb-6 border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50">
@@ -315,52 +247,21 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
         <div className="flex-1">
           <AlertDescription>
             <div className="flex items-start gap-3">
-              <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+              <Loader2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600 animate-spin" />
               <div className="flex-1">
                 <p className="font-semibold text-blue-900 mb-1">
-                  {isProcessing ? (
-                    <>Processing Photos (Batch {batchCount})...</>
-                  ) : currentProcessingCount > 0 ? (
-                    <>Processing Photos...</>
-                  ) : (
-                    <>Photos Ready for Processing</>
-                  )}
+                  Processing your photos...
                 </p>
-                <div className="text-sm text-blue-800 space-y-1">
-                  <p>
-                    {isProcessing && (
-                      <>
-                        Processed {totalProcessed} photo{totalProcessed !== 1 ? "s" : ""} so far.
-                        {currentPendingCount > 0 && ` ${currentPendingCount} remaining in queue.`}
-                        {" "}Processing continues automatically in batches.
-                      </>
-                    )}
-                    {!isProcessing && currentProcessingCount > 0 && (
-                      <>
-                        {currentProcessingCount} photo{currentProcessingCount !== 1 ? "s are" : " is"} currently being processed.
-                        {currentPendingCount > 0 && ` ${currentPendingCount} more waiting in queue.`}
-                      </>
-                    )}
-                    {!isProcessing && currentProcessingCount === 0 && currentPendingCount > 0 && (
-                      <>
-                        You have {currentPendingCount} photo{currentPendingCount !== 1 ? "s" : ""} waiting for AI processing
-                        (captions, embeddings, face detection).
-                      </>
-                    )}
+                <div className="space-y-1">
+                  <p className="text-sm text-blue-800">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                      AI processing happening at the backend
+                    </span>
                   </p>
-                  {isProcessing && (
-                    <p className="text-xs text-blue-600 font-medium">
-                      Auto-retry enabled: System will continue processing until all photos are complete. You can cancel anytime.
-                    </p>
-                  )}
-                  {!isProcessing && processingCount > 0 && (
-                    <p className="text-xs text-blue-600 font-medium">
-                      AI is analyzing each photo to generate captions and enable smart search. This takes a while to ensure the best results!
-                    </p>
-                  )}
-                  {!isProcessing && processingCount === 0 && pendingCount > 0 && (
-                    <p className="text-xs text-blue-600 font-medium">
-                      Processing enables AI-powered features like smart search and automatic photo organization. You can continue browsing while it runs in the background.
+                  {totalItems > 0 && (
+                    <p className="text-xs text-blue-700">
+                      {totalItems} photo{totalItems !== 1 ? 's' : ''} remaining
                     </p>
                   )}
                 </div>
@@ -370,26 +271,6 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
         </div>
 
         <div className="flex items-center gap-2">
-          {isProcessing ? (
-            <Button
-              onClick={handleCancelProcessing}
-              size="sm"
-              variant="outline"
-              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-            >
-              Cancel
-            </Button>
-          ) : currentPendingCount > 0 && currentProcessingCount === 0 && (
-            <Button
-              onClick={handleProcessNow}
-              disabled={isProcessing}
-              size="sm"
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Process Now
-            </Button>
-          )}
           {!isProcessing && (
             <Button
               onClick={handleDismiss}

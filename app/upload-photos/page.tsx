@@ -45,6 +45,7 @@ export default function UploadPhotosPage() {
   const [totalPhotosToUpload, setTotalPhotosToUpload] = useState(0)
   const [useChunkedUpload, setUseChunkedUpload] = useState(false)
   const [chunkedUploadFiles, setChunkedUploadFiles] = useState<File[]>([])
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
 
   // Check for OAuth callback success
   useEffect(() => {
@@ -288,23 +289,39 @@ export default function UploadPhotosPage() {
       setUploadedPhotoCount(result.uploaded_count)
 
       if (result.uploaded_count > 0) {
-        // Show queue notification instead of redirect
-        setShowQueueNotification(true)
-        setIsUploading(false)
-
-        toast.success("Upload Complete!", {
-          description: `Successfully uploaded ${result.uploaded_count} photo${result.uploaded_count !== 1 ? "s" : ""} to Supabase Storage. They are ready for processing.`,
-          duration: 5000,
+        // Show congratulations message
+        toast.success("🎉 Upload Complete!", {
+          description: `Successfully uploaded ${result.uploaded_count} photo${result.uploaded_count !== 1 ? "s" : ""}!`,
+          duration: 3000,
         })
 
         // Show errors if any
         if (result.errors && result.errors.length > 0) {
           console.error('[Upload] Errors:', result.errors)
-          toast.warning("Some uploads failed", {
-            description: `${result.failed_count} photo${result.failed_count !== 1 ? "s" : ""} failed to upload. Check console for details.`,
+          toast.warning("Some uploads had issues", {
+            description: `${result.failed_count} photo${result.failed_count !== 1 ? "s" : ""} failed to upload.`,
             duration: 5000,
           })
         }
+
+        // Show countdown and redirect to dashboard
+        setIsUploading(false)
+        setRedirectCountdown(3)
+
+        // Countdown timer
+        const countdownInterval = setInterval(() => {
+          setRedirectCountdown((prev) => {
+            if (prev === null || prev <= 1) {
+              clearInterval(countdownInterval)
+              // Clear states and redirect
+              setUploadedImages([])
+              setGooglePhotos([])
+              router.push("/dashboard")
+              return null
+            }
+            return prev - 1
+          })
+        }, 1000)
       } else {
         throw new Error("No photos were uploaded successfully")
       }
@@ -321,7 +338,7 @@ export default function UploadPhotosPage() {
     }
   }
 
-  const handleChunkedUploadComplete = (uploaded: number, failed: number) => {
+  const handleChunkedUploadComplete = async (uploaded: number, failed: number) => {
     console.log(`[Chunked Upload] Complete: ${uploaded} uploaded, ${failed} failed`)
 
     // Clean up object URLs
@@ -337,19 +354,36 @@ export default function UploadPhotosPage() {
     setChunkedUploadFiles([])
 
     if (uploaded > 0) {
-      setShowQueueNotification(true)
-
-      toast.success("Upload Complete!", {
-        description: `Successfully uploaded ${uploaded} photo${uploaded !== 1 ? "s" : ""}. They are ready for processing.`,
-        duration: 5000,
+      // Show congratulations message
+      toast.success("🎉 Upload Complete!", {
+        description: `Successfully uploaded ${uploaded} photo${uploaded !== 1 ? "s" : ""}!`,
+        duration: 3000,
       })
 
       if (failed > 0) {
-        toast.warning("Some uploads failed", {
+        toast.warning("Some uploads had issues", {
           description: `${failed} photo${failed !== 1 ? "s" : ""} failed to upload.`,
           duration: 5000,
         })
       }
+
+      // Show countdown and redirect to dashboard
+      setRedirectCountdown(3)
+
+      // Countdown timer
+      const countdownInterval = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(countdownInterval)
+            // Clear states and redirect
+            setUploadedImages([])
+            setGooglePhotos([])
+            router.push("/dashboard")
+            return null
+          }
+          return prev - 1
+        })
+      }, 1000)
     }
   }
 
@@ -357,48 +391,6 @@ export default function UploadPhotosPage() {
     setUseChunkedUpload(false)
     setChunkedUploadFiles([])
     toast.info("Upload cancelled")
-  }
-
-  const handleProcessQueue = async () => {
-    setIsProcessing(true)
-
-    try {
-      const response = await fetch('/api/photos/process-queue', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to start processing')
-      }
-
-      const result = await response.json()
-
-      toast.success("Processing Started!", {
-        description: `Processing ${result.queue_count || uploadedPhotoCount} photo${(result.queue_count || uploadedPhotoCount) !== 1 ? "s" : ""} in the background. You can continue using the app.`,
-        duration: 5000,
-      })
-
-      // Clear states and redirect to dashboard
-      setShowQueueNotification(false)
-      setUploadedImages([])
-      setGooglePhotos([])
-      setUploadComplete(true)
-
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 2000)
-    } catch (error) {
-      console.error("Processing error:", error)
-      toast.error("Processing Failed", {
-        description: error instanceof Error ? error.message : "Failed to start processing. Please try again.",
-        duration: 5000,
-      })
-    } finally {
-      setIsProcessing(false)
-    }
   }
 
   return (
@@ -658,30 +650,21 @@ export default function UploadPhotosPage() {
 
             {/* Upload Progress */}
             {isUploading && !useChunkedUpload && (
-              <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
+              <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 backdrop-blur-sm">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
-                    <Progress value={uploadProgress} className="h-2" />
+                    <div className="text-center mb-4">
+                      <p className="text-lg font-semibold text-blue-900 mb-2">
+                        {uploadProgress < 50 && `Uploading ${totalPhotosToUpload} photo${totalPhotosToUpload !== 1 ? "s" : ""}...`}
+                        {uploadProgress >= 50 && uploadProgress < 90 && "Halfway there! Looking good..."}
+                        {uploadProgress >= 90 && uploadProgress < 100 && `Almost there! Uploading ${totalPhotosToUpload} photo${totalPhotosToUpload !== 1 ? "s" : ""}...`}
+                        {uploadProgress === 100 && "Upload complete!"}
+                      </p>
+                    </div>
+                    <Progress value={uploadProgress} className="h-2 bg-blue-100" />
                     <div className="text-center">
-                      <p className="text-sm font-semibold text-foreground mb-1">
-                        {uploadProgress < 98 && currentUploadingPhoto > 0 && (
-                          <>Uploading photo {currentUploadingPhoto} of {totalPhotosToUpload}</>
-                        )}
-                        {uploadProgress >= 98 && uploadProgress < 100 && <>Finalizing upload...</>}
-                        {uploadProgress === 100 && <>Upload complete!</>}
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-2">
+                      <p className="text-xs text-blue-600 font-medium">
                         {Math.round(uploadProgress)}% complete
-                      </p>
-                      {/* Helper messages */}
-                      <p className="text-xs text-blue-600 font-medium mt-2">
-                        {uploadProgress < 25 && "Getting your photos ready..."}
-                        {uploadProgress >= 25 && uploadProgress < 50 && "Making progress! This may take a moment for large collections"}
-                        {uploadProgress >= 50 && uploadProgress < 75 && `It's going well! Processing photo ${currentUploadingPhoto} of ${totalPhotosToUpload}`}
-                        {uploadProgress >= 75 && uploadProgress < 90 && "Almost there! Hang tight"}
-                        {uploadProgress >= 90 && uploadProgress < 98 && "Nearly done! Finalizing your photos"}
-                        {uploadProgress >= 98 && uploadProgress < 100 && "Just a moment more..."}
-                        {uploadProgress === 100 && "All done! Your photos are ready"}
                       </p>
                     </div>
                   </div>
@@ -689,66 +672,33 @@ export default function UploadPhotosPage() {
               </Card>
             )}
 
-            {/* Queue Processing Notification */}
-            {showQueueNotification && (
-              <Card className="border-blue-200 bg-blue-50/80 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-900">
-                    <CheckCircle className="h-6 w-6 text-blue-600" />
-                    Photos Uploaded Successfully!
-                  </CardTitle>
-                  <CardDescription className="text-blue-800">
-                    {uploadedPhotoCount} photo{uploadedPhotoCount !== 1 ? "s have" : " has"} been uploaded to your library
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Alert className="border-amber-200 bg-amber-50">
-                    <AlertDescription className="text-amber-900">
-                      <p className="font-semibold mb-2">📸 Ready for Processing</p>
-                      <p className="text-sm">
-                        Your photos are ready! They need to be processed for AI features like caption generation and face detection.
-                        This happens in the background and won't affect your browsing.
-                      </p>
-                    </AlertDescription>
-                  </Alert>
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={handleProcessQueue}
-                      disabled={isProcessing}
-                      className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-                      size="lg"
-                    >
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      {isProcessing ? "Starting..." : "Process Now"}
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        // Track that user chose to process later
-                        console.log(`[User Action] Chose to process ${uploadedPhotoCount} photos later`)
-
-                        toast.info("Photos Saved", {
-                          description: `${uploadedPhotoCount} photo${uploadedPhotoCount !== 1 ? "s are" : " is"} ready. You can process them anytime from your dashboard.`,
-                          duration: 5000,
-                        })
-
-                        setShowQueueNotification(false)
-                        router.push("/dashboard")
-                      }}
-                      variant="outline"
-                      size="lg"
-                    >
-                      Process Later
-                    </Button>
+            {/* Redirect Countdown */}
+            {redirectCountdown !== null && (
+              <Card className="border-green-200 bg-gradient-to-r from-green-50 to-blue-50 backdrop-blur-sm">
+                <CardContent className="pt-6">
+                  <div className="space-y-4 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                      <h3 className="text-xl font-bold text-green-900">Uploading Done!</h3>
+                    </div>
+                    <p className="text-base text-blue-800">
+                      You can browse your photos at the dashboard while the AI processing happens in the background.
+                    </p>
+                    <div className="flex items-center justify-center gap-3 pt-4">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
+                        <span className="text-3xl font-bold text-blue-600">{redirectCountdown}</span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Redirecting to dashboard in {redirectCountdown} second{redirectCountdown !== 1 ? "s" : ""}...
+                    </p>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">
-                    You can process these photos anytime from your dashboard
-                  </p>
                 </CardContent>
               </Card>
             )}
 
             {/* Action Buttons */}
-            {totalPhotos > 0 && !isUploading && !showQueueNotification && (
+            {totalPhotos > 0 && !isUploading && !isProcessing && redirectCountdown === null && (
               <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
                 <CardContent className="pt-6">
                   <div className="flex flex-col gap-4">

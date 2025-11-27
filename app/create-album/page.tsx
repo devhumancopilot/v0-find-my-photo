@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Sparkles, ArrowLeft, ArrowRight, Loader2, ImageIcon, Calendar, Check, X, Upload } from "lucide-react"
+import { useSearchStream } from "@/hooks/use-search-stream"
+import { SearchProgressLoader } from "@/components/search-progress-loader"
 
 type Step = 1 | 2 | 3
 
@@ -32,62 +34,43 @@ export default function CreateAlbumPage() {
   const [suggestedPhotos, setSuggestedPhotos] = useState<SuggestedPhoto[]>([])
   const [selectedPhotos, setSelectedPhotos] = useState<number[]>([])
 
+  // Use streaming hook for real-time progress
+  const { isSearching, progress: searchProgress, result: searchResult, error: searchError, startSearch } = useSearchStream()
+
   const totalSteps = 3
   const progress = (currentStep / totalSteps) * 100
 
   const handleNext = async () => {
     if (currentStep === 1) {
-      // Trigger AI semantic search via album-create-request API
-      setIsProcessing(true)
+      // Trigger AI semantic search via streaming API
       try {
-        const response = await fetch("/api/webhooks/album-create-request", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            query: albumDescription,
-            albumTitle: albumTitle,
-          }),
+        await startSearch({
+          query: albumDescription,
+          albumTitle: albumTitle,
         })
 
-        if (!response.ok) {
-          throw new Error("Failed to create album request")
-        }
-
-        const data = await response.json()
-        console.log("[v0] Album request response:", data)
-        console.log("[v0] Photos in response:", data.photos)
-        console.log("[v0] Photos is array:", Array.isArray(data.photos))
-        console.log("[v0] Photos length:", data.photos?.length)
-
-        // Store the photos returned from webhook
-        if (data.photos && Array.isArray(data.photos)) {
-          console.log("[v0] ✅ Setting suggested photos:", data.photos.length)
-          setSuggestedPhotos(data.photos)
+        // Check for results
+        if (searchResult && searchResult.photos && Array.isArray(searchResult.photos)) {
+          console.log("[v0] ✅ Setting suggested photos:", searchResult.photos.length)
+          setSuggestedPhotos(searchResult.photos)
           // Auto-select all photos by default
-          const photoIds = data.photos.map((photo: SuggestedPhoto) => photo.id)
+          const photoIds = searchResult.photos.map((photo: SuggestedPhoto) => photo.id)
           console.log("[v0] Auto-selecting photo IDs:", photoIds)
           setSelectedPhotos(photoIds)
 
-          if (data.photos.length === 0) {
-            console.warn("[v0] ⚠️ No photos returned from webhook")
+          if (searchResult.photos.length === 0) {
+            console.warn("[v0] ⚠️ No photos returned from search")
             alert("No matching photos found. Try a different search query.")
+          } else {
+            setCurrentStep(2)
           }
-        } else {
-          console.error("[v0] ❌ No photos data in response:", data)
-          console.error("[v0] Response structure:", Object.keys(data))
-          setSuggestedPhotos([])
-          setSelectedPhotos([])
-          alert("Failed to get photos from search. Please try again.")
+        } else if (searchError) {
+          console.error("[v0] ❌ Search error:", searchError)
+          alert("Failed to find photos: " + searchError)
         }
-
-        setIsProcessing(false)
-        setCurrentStep(2)
       } catch (error) {
         console.error("[v0] Album request error:", error)
         alert("Failed to process request. Please try again.")
-        setIsProcessing(false)
       }
     } else if (currentStep === 2) {
       // Move from Step 2 to Step 3
@@ -136,7 +119,7 @@ export default function CreateAlbumPage() {
     setSelectedPhotos((prev) => (prev.includes(photoId) ? prev.filter((id) => id !== photoId) : [...prev, photoId]))
   }
 
-  const canProceed = currentStep === 1 ? albumDescription.trim().length > 0 : selectedPhotos.length > 0
+  const canProceed = currentStep === 1 ? albumDescription.trim().length > 0 && !isSearching : selectedPhotos.length > 0
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -228,37 +211,35 @@ export default function CreateAlbumPage() {
                   </div>
                 </div>
 
+                {/* Show progress loader when searching */}
+                {isSearching && searchProgress && (
+                  <SearchProgressLoader progress={searchProgress} className="mb-6" />
+                )}
+
                 <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-3">
-                  <Button variant="outline" className="flex-1 w-full bg-transparent" asChild>
+                  <Button variant="outline" className="flex-1 w-full bg-transparent" asChild disabled={isSearching}>
                     <Link href="/dashboard" className="flex w-full items-center justify-center">
                       <ArrowLeft className="mr-2 h-4 w-4" />
                       Cancel
                     </Link>
                   </Button>
-                  <div className="flex-1 w-full space-y-2">
-                    <Button
-                      onClick={handleNext}
-                      disabled={!canProceed || isProcessing}
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          AI is finding photos...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          Find Photos
-                        </>
-                      )}
-                    </Button>
-                    {isProcessing && (
-                      <p className="text-xs text-center text-blue-600 font-medium">
-                        Our AI is analyzing your photo collection to find the best matches. This may take a moment...
-                      </p>
+                  <Button
+                    onClick={handleNext}
+                    disabled={!canProceed || isSearching}
+                    className="flex-1 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                  >
+                    {isSearching ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Finding Photos...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Find Photos
+                      </>
                     )}
-                  </div>
+                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -3,7 +3,7 @@
  * Improves photo search with query enhancement, multi-signal ranking, and smart re-ranking
  */
 
-import { openai } from "./openai"
+import { openai, type VisionReasoningResult } from "./openai"
 
 export interface EnhancedQuery {
   originalQuery: string
@@ -272,7 +272,193 @@ export function calculateTemporalRelevance(
 }
 
 /**
- * Main enhanced search pipeline
+ * Progress callback for real-time updates
+ */
+export interface VisionProgressCallback {
+  (event: {
+    type: 'batch_start' | 'batch_complete' | 'image_processed' | 'filtering' | 'reranking' | 'complete'
+    current?: number
+    total?: number
+    message: string
+    educational?: string
+  }): void
+}
+
+/**
+ * Layer 4: Vision Reasoning Validation (NEW)
+ *
+ * Applies GPT Vision reasoning to ALL photos to filter out semantic mismatches.
+ * This catches CLIP's limitations (e.g., "bear" matching pandas).
+ *
+ * Strategy:
+ * 1. Fetch images from Supabase Storage in parallel
+ * 2. Call GPT Vision API in batches for all photos
+ * 3. Filter out photos where matches=false or confidence < threshold
+ * 4. Re-rank remaining photos using vision confidence scores
+ */
+export async function reRankWithVisionReasoning(
+  photos: RankedPhoto[],
+  userQuery: string,
+  onProgress?: VisionProgressCallback
+): Promise<RankedPhoto[]> {
+  console.log(`[Vision Reasoning][Layer 4] Starting vision validation for ${photos.length} photos`)
+  console.log(`[Vision Reasoning][Layer 4] Query: "${userQuery}"`)
+
+  // Import at runtime to avoid circular dependencies
+  const { evaluateImageMatch } = await import("./openai")
+  const { createServiceRoleClient } = await import("@/lib/supabase/server")
+
+  const supabase = createServiceRoleClient()
+  const minConfidence = parseInt(process.env.VISION_MIN_CONFIDENCE || "60", 10) // 60% minimum
+
+  // Educational messages about the vision reasoning process
+  const educationalMessages = [
+    "Using GPT-4o Vision to verify each image matches your description",
+    "CLIP embeddings are great at visual similarity, but GPT Vision ensures semantic accuracy",
+    "Filtering out false positives like pandas in bear searches or deserts in beach queries",
+    "Vision AI can understand context that pure embeddings might miss",
+    "Each image is analyzed with low-resolution detail for cost optimization",
+    "Combining embedding similarity with vision reasoning for best results",
+  ]
+
+  // Process all photos in parallel (with rate limiting via batches)
+  const batchSize = 5 // Process 5 images at a time to avoid rate limits
+  const results: Array<RankedPhoto & { visionResult?: any }> = []
+  const totalBatches = Math.ceil(photos.length / batchSize)
+
+  for (let i = 0; i < photos.length; i += batchSize) {
+    const batch = photos.slice(i, i + batchSize)
+    const batchNumber = Math.floor(i / batchSize) + 1
+
+    console.log(`[Vision Reasoning][Layer 4] Processing batch ${batchNumber}/${totalBatches}`)
+
+    // Emit batch start progress
+    onProgress?.({
+      type: 'batch_start',
+      current: i,
+      total: photos.length,
+      message: `Analyzing images ${i + 1}-${Math.min(i + batchSize, photos.length)} of ${photos.length}`,
+      educational: educationalMessages[batchNumber % educationalMessages.length],
+    })
+
+    const batchResults = await Promise.all(
+      batch.map(async (photo) => {
+        try {
+          // Fetch image from Supabase Storage
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from("photos")
+            .download(photo.file_url.split("/photos/")[1])
+
+          if (downloadError || !fileData) {
+            console.error(`[Vision Reasoning] Failed to fetch ${photo.name}:`, downloadError)
+            return { ...photo, visionResult: null }
+          }
+
+          // Convert to base64
+          const arrayBuffer = await fileData.arrayBuffer()
+          const base64 = Buffer.from(arrayBuffer).toString("base64")
+          const mimeType = fileData.type || "image/jpeg"
+
+          // Evaluate with GPT Vision
+          const visionResult = await evaluateImageMatch(base64, mimeType, userQuery)
+
+          console.log(`[Vision Reasoning] ${photo.name}: matches=${visionResult.matches}, confidence=${visionResult.confidence}%`)
+          if (visionResult.concerns.length > 0) {
+            console.log(`[Vision Reasoning]   Concerns: ${visionResult.concerns.join(", ")}`)
+          }
+
+          return { ...photo, visionResult }
+        } catch (error) {
+          console.error(`[Vision Reasoning] Error processing ${photo.name}:`, error)
+          // On error, keep the photo with neutral score
+          return {
+            ...photo,
+            visionResult: {
+              matches: true,
+              confidence: 50,
+              reasoning: "Error during evaluation",
+              concerns: [],
+            },
+          }
+        }
+      })
+    )
+
+    results.push(...batchResults)
+
+    // Emit batch complete progress
+    onProgress?.({
+      type: 'batch_complete',
+      current: Math.min(i + batchSize, photos.length),
+      total: photos.length,
+      message: `Completed batch ${batchNumber}/${totalBatches}`,
+    })
+  }
+
+  // Filter out non-matching photos
+  onProgress?.({
+    type: 'filtering',
+    message: 'Filtering out semantic mismatches',
+    educational: 'Removing images that don\'t match your description, even if they\'re visually similar',
+  })
+
+  const matchingPhotos = results.filter(p => {
+    if (!p.visionResult) return true // Keep if vision failed
+    return p.visionResult.matches && p.visionResult.confidence >= minConfidence
+  })
+
+  console.log(`[Vision Reasoning][Layer 4] Filtered: ${photos.length} → ${matchingPhotos.length} photos`)
+  console.log(`[Vision Reasoning][Layer 4] Removed ${photos.length - matchingPhotos.length} semantic mismatches`)
+
+  // Re-rank using combined score: original score + vision confidence
+  onProgress?.({
+    type: 'reranking',
+    message: 'Re-ranking results by vision confidence',
+    educational: 'Combining embedding scores with vision AI confidence for optimal ranking',
+  })
+
+  const visionWeight = parseFloat(process.env.VISION_RERANKING_WEIGHT || "0.4") // 40% weight
+  const reRanked = matchingPhotos.map(photo => {
+    if (!photo.visionResult) {
+      return photo // Keep original score if vision failed
+    }
+
+    // Combine scores: 60% original, 40% vision confidence
+    const visionScore = photo.visionResult.confidence / 100 // Normalize to 0-1
+    const combinedScore = (photo.finalScore * (1 - visionWeight)) + (visionScore * visionWeight)
+
+    return {
+      ...photo,
+      finalScore: Math.min(1.0, combinedScore),
+      scoreBreakdown: {
+        ...photo.scoreBreakdown,
+        visionConfidence: visionScore,
+        visionReasoning: photo.visionResult.reasoning,
+      } as any,
+    }
+  })
+
+  // Sort by new combined score
+  reRanked.sort((a, b) => b.finalScore - a.finalScore)
+
+  console.log(`[Vision Reasoning][Layer 4] Top 5 after vision re-ranking:`)
+  reRanked.slice(0, 5).forEach((photo, i) => {
+    const visionConf = photo.visionResult?.confidence || 50
+    console.log(`  ${i + 1}. Score: ${(photo.finalScore * 100).toFixed(1)}% (Vision: ${visionConf}%) - ${photo.name}`)
+  })
+
+  // Emit completion
+  onProgress?.({
+    type: 'complete',
+    message: `Vision reasoning complete! Found ${reRanked.length} matching images`,
+    educational: `Filtered ${photos.length - reRanked.length} semantic mismatches for highly accurate results`,
+  })
+
+  return reRanked
+}
+
+/**
+ * Main enhanced search pipeline (Layers 2-4)
  */
 export async function enhanceSearchResults(
   userQuery: string,
@@ -308,7 +494,7 @@ export async function enhanceSearchResults(
   // Step 3: Re-rank with diversity
   const reRankedPhotos = reRankWithDiversity(scoredPhotos)
 
-  console.log(`[Search Enhancement] Top 5 results:`)
+  console.log(`[Search Enhancement] Top 5 results after Layer 3:`)
   reRankedPhotos.slice(0, 5).forEach((photo, i) => {
     console.log(`  ${i + 1}. Score: ${(photo.finalScore * 100).toFixed(1)}% - ${photo.name}`)
     console.log(`     Breakdown: Embedding=${(photo.scoreBreakdown.embeddingSimilarity * 100).toFixed(1)}%, ` +

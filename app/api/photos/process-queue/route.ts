@@ -45,54 +45,126 @@ export async function POST(request: NextRequest) {
     // Use service role client for database operations
     const serviceSupabase = createServiceRoleClient()
 
-    // Get pending queue items for this user
-    // IMPORTANT: On Vercel serverless, we must await processing before returning
-    // Process only a small batch to avoid timeouts (300s max on Pro plan)
-    const batchSize = parseInt(process.env.PROCESS_QUEUE_BATCH_SIZE || '3', 10)
-    const { data: queueItems, error: queueError } = await serviceSupabase
+    // STEP 1: Look for an existing 'processing' item for this user
+    // Design: Only ONE 'processing' item per user at a time
+    let { data: queueItems, error: queueError } = await serviceSupabase
       .from('photo_processing_queue')
       .select('id, photo_id, retry_count')
       .eq('user_id', userId)
-      .eq('status', 'pending')
-      .order('priority', { ascending: false })
+      .eq('status', 'processing')
       .order('created_at', { ascending: true })
-      .limit(batchSize) // Process photos per request - configurable to stay within Vercel timeout limits
+      .limit(1)
 
     if (queueError) {
-      console.error('[Process Queue] Error fetching queue:', queueError)
+      console.error('[Process Queue] Error fetching processing item:', queueError)
       return NextResponse.json(
         { error: 'Failed to fetch queue', details: queueError.message },
         { status: 500 }
       )
     }
 
+    // STEP 2: If no 'processing' item, get first 'pending' and mark it 'processing'
     if (!queueItems || queueItems.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No photos in queue',
-        queue_count: 0,
-        processed_count: 0,
-      })
+      console.log('[Process Queue] No processing item found, claiming next pending item')
+
+      const { data: pendingItems, error: pendingError } = await serviceSupabase
+        .from('photo_processing_queue')
+        .select('id, photo_id, retry_count')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      if (pendingError) {
+        console.error('[Process Queue] Error fetching pending items:', pendingError)
+        return NextResponse.json(
+          { error: 'Failed to fetch pending items', details: pendingError.message },
+          { status: 500 }
+        )
+      }
+
+      if (!pendingItems || pendingItems.length === 0) {
+        console.log('[Process Queue] No pending items found')
+        return NextResponse.json({
+          success: true,
+          message: 'No photos in queue',
+          queue_count: 0,
+          processed_count: 0,
+        })
+      }
+
+      // Mark it as processing
+      const { error: updateError } = await serviceSupabase
+        .from('photo_processing_queue')
+        .update({
+          status: 'processing',
+          processing_started_at: new Date().toISOString(),
+        })
+        .eq('id', pendingItems[0].id)
+
+      if (updateError) {
+        console.error('[Process Queue] Error marking item as processing:', updateError)
+        return NextResponse.json(
+          { error: 'Failed to mark item as processing', details: updateError.message },
+          { status: 500 }
+        )
+      }
+
+      queueItems = pendingItems
     }
 
-    console.log(`[Process Queue] Batch size: ${batchSize} (configurable via PROCESS_QUEUE_BATCH_SIZE)`)
-    console.log(`[Process Queue] Found ${queueItems.length} photos to process for user ${userId}`)
+    console.log(`[Process Queue] Processing mode: Sequential (ONE 'processing' item per user)`)
+    console.log(`[Process Queue] Processing photo for user ${userId}`)
 
-    // CRITICAL: On Vercel serverless, we MUST await processing
-    // The execution context is killed after response is sent, stopping all background work
+    // STEP 3: Process the photo
     const results = await processQueueInBackground(userId, queueItems, serviceSupabase)
 
-    // Check if there are more pending items after this batch
-    const { data: remainingItems, error: remainingError } = await serviceSupabase
+    // STEP 4: After processing, mark next 'pending' item as 'processing'
+    const { data: nextPending, error: nextError } = await serviceSupabase
       .from('photo_processing_queue')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .eq('user_id', userId)
       .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(1)
 
-    const remainingCount = remainingError ? 0 : (remainingItems || 0)
-    const hasMore = remainingCount > 0
+    let hasMore = false
+    if (!nextError && nextPending && nextPending.length > 0) {
+      // Mark the next item as 'processing'
+      await serviceSupabase
+        .from('photo_processing_queue')
+        .update({
+          status: 'processing',
+          processing_started_at: new Date().toISOString(),
+        })
+        .eq('id', nextPending[0].id)
 
-    console.log(`[Process Queue] Batch complete. Remaining: ${remainingCount}, Has More: ${hasMore}`)
+      hasMore = true
+    }
+
+    // STEP 5: Trigger next process if needed
+    if (hasMore) {
+      console.log(`[Process Queue] Marked next item as processing, triggering next process...`)
+
+      const protocol = request.headers.get('x-forwarded-proto') || 'http'
+      const host = request.headers.get('host') || 'localhost:3000'
+      const baseUrl = `${protocol}://${host}`
+      const apiUrl = `${baseUrl}/api/photos/process-queue`
+
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': request.headers.get('cookie') || '',
+        },
+      }).catch(error => {
+        console.error('[Process Queue] Failed to trigger next process:', error)
+      })
+
+      console.log(`[Process Queue] Next process triggered successfully`)
+    } else {
+      console.log(`[Process Queue] No more photos to process - chain complete`)
+    }
 
     return NextResponse.json({
       success: true,
@@ -100,7 +172,6 @@ export async function POST(request: NextRequest) {
       queue_count: queueItems.length,
       processed_count: results.processedCount,
       failed_count: results.failedCount,
-      remaining_count: remainingCount,
       has_more: hasMore,
     })
   } catch (error) {
@@ -137,15 +208,7 @@ async function processQueueInBackground(
     console.log(`[Process Queue BG] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
     console.log(`[Process Queue BG] Starting item ${processedCount + failedCount + 1}/${queueItems.length} - Queue ID: ${queueItem.id}`)
     try {
-      // Mark as processing
-      await supabase
-        .from('photo_processing_queue')
-        .update({
-          status: 'processing',
-          processing_started_at: new Date().toISOString(),
-        })
-        .eq('id', queueItem.id)
-
+      // Update photo status to processing (queue item already marked as processing atomically)
       await supabase
         .from('photos')
         .update({ processing_status: 'processing' })

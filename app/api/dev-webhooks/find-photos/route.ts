@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
 
       console.log(`[Fallback][${searchType}] After filtering (>= ${(MIN_SIMILARITY * 100).toFixed(0)}% similarity): ${filteredPhotos.length} photos`)
 
-      // ENHANCED ALGORITHM: Apply multi-signal ranking and re-ranking
+      // ENHANCED ALGORITHM: Apply multi-signal ranking and re-ranking (Layers 2-3)
       let photos: any[] = filteredPhotos
 
       if (query && filteredPhotos.length > 0) {
@@ -195,13 +195,34 @@ export async function POST(request: NextRequest) {
           data: p.data,
         }))
 
-        // Apply enhanced search
+        // Apply Layers 2-3: Multi-signal ranking + diversity
         const enhancedPhotos = await enhanceSearchResults(query, photosWithMetadata)
 
-        console.log(`[Fallback][ENHANCED] ✓ Enhanced ranking complete`)
+        console.log(`[Fallback][ENHANCED] ✓ Enhanced ranking complete (Layers 2-3)`)
         console.log(`[Fallback][ENHANCED] Top result improved from ${(filteredPhotos[0]?.similarity * 100).toFixed(1)}% to ${(enhancedPhotos[0]?.finalScore * 100).toFixed(1)}%`)
 
-        photos = enhancedPhotos
+        // LAYER 4: GPT Vision Reasoning (NEW)
+        // Apply vision validation to ALL results to filter semantic mismatches
+        // Default: true (enabled by default for maximum accuracy)
+        const enableVisionReasoning = process.env.ENABLE_VISION_RERANKING !== "false"
+
+        if (enableVisionReasoning) {
+          console.log(`[Fallback][VISION] 🔍 Layer 4: Applying GPT Vision reasoning to ${enhancedPhotos.length} photos...`)
+
+          // Import vision re-ranking function
+          const { reRankWithVisionReasoning } = await import("@/lib/services/search-enhancement")
+
+          // Apply vision reasoning to ALL photos
+          const visionFilteredPhotos = await reRankWithVisionReasoning(enhancedPhotos, query)
+
+          console.log(`[Fallback][VISION] ✓ Vision reasoning complete`)
+          console.log(`[Fallback][VISION] Semantic filtering: ${enhancedPhotos.length} → ${visionFilteredPhotos.length} photos`)
+
+          photos = visionFilteredPhotos
+        } else {
+          console.log(`[Fallback][VISION] ⏭️  Layer 4 disabled (set ENABLE_VISION_RERANKING=false to disable)`)
+          photos = enhancedPhotos
+        }
       } else {
         console.log(`[Fallback][ENHANCED] ⏭️  Skipping enhancement (image search or no results)`)
       }
