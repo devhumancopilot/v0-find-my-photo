@@ -14,9 +14,6 @@ const nextConfig = {
     cpus: 1,
   },
 
-  // Standalone output for deployment
-  output: 'standalone',
-
   // No source maps to save memory
   productionBrowserSourceMaps: false,
 
