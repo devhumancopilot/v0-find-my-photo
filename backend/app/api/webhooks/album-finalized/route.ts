@@ -72,14 +72,24 @@ export async function POST(request: Request) {
       photoCount: photoIds.length,
     })
 
+    // Get cover photo URL for the album
+    const { data: coverPhoto } = await supabase
+      .from("photos")
+      .select("file_url")
+      .eq("id", coverPhotoId || photoIds[0])
+      .single()
+
     // Create album directly in database (no need for n8n webhook)
     const { data: album, error: albumError } = await supabase
       .from("albums")
       .insert({
         user_id: user.id,
-        title: albumTitle,
+        name: albumTitle, // Using 'name' column (check if it exists, might need to be 'title')
         description: description || null,
-        cover_photo_id: coverPhotoId || photoIds[0],
+        cover_image_url: coverPhoto?.file_url || null,
+        photo_count: photoIds.length,
+        status: 'active',
+        processing_status: 'completed',
       })
       .select()
       .single()
@@ -94,15 +104,11 @@ export async function POST(request: Request) {
 
     console.log("[v0] ✓ Album created:", album.id)
 
-    // Link photos to album
-    const albumPhotos = photoIds.map(photoId => ({
-      album_id: album.id,
-      photo_id: photoId,
-    }))
-
+    // Link photos to album by updating their album_id
     const { error: linkError } = await supabase
-      .from("album_photos")
-      .insert(albumPhotos)
+      .from("photos")
+      .update({ album_id: album.id })
+      .in("id", photoIds)
 
     if (linkError) {
       console.error("[v0] Failed to link photos to album:", linkError)
