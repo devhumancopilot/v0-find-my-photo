@@ -44,6 +44,8 @@ export function useSearchStream(): UseSearchStreamReturn {
       abortControllerRef.current = new AbortController()
 
       try {
+        console.log("[SearchStream] Starting search with params:", params)
+
         const response = await fetch("/api/webhooks/album-create-request-stream", {
           method: "POST",
           headers: {
@@ -53,7 +55,12 @@ export function useSearchStream(): UseSearchStreamReturn {
           signal: abortControllerRef.current.signal,
         })
 
+        console.log("[SearchStream] Response status:", response.status, response.statusText)
+        console.log("[SearchStream] Response headers:", Object.fromEntries(response.headers.entries()))
+
         if (!response.ok) {
+          const errorText = await response.text()
+          console.error("[SearchStream] Error response body:", errorText.substring(0, 500))
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
 
