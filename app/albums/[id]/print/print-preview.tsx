@@ -956,7 +956,7 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
               onClick={handleDownloadPDF}
               disabled={isGeneratingPDF}
               variant="default"
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="hidden bg-green-600 hover:bg-green-700 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGeneratingPDF ? (
                 <>
