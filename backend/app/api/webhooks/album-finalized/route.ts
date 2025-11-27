@@ -66,19 +66,6 @@ export async function POST(request: Request) {
 
     console.log(`[v0] ✓ All ${photoIds.length} photos verified to belong to user ${user.id}`)
 
-    // Prepare n8n webhook payload
-    const n8nPayload = {
-      user: {
-        id: user.id,
-        email: user.email,
-      },
-      albumTitle: albumTitle,
-      photoIds: photoIds,
-      description: description || null,
-      coverPhotoId: coverPhotoId || photoIds[0], // Default to first photo if not specified
-      timestamp: new Date().toISOString(),
-    }
-
     console.log("[v0] Creating album directly in database:", {
       userId: user.id,
       albumTitle,
