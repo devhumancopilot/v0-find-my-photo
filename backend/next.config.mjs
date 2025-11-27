@@ -20,9 +20,6 @@ const nextConfig = {
   // No source maps to save memory
   productionBrowserSourceMaps: false,
 
-  // Optimize bundle
-  swcMinify: true,
-
   // CORS headers for frontend access
   async headers() {
     const allowedOrigins = [

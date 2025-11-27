@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@sparticuz/chromium": "latest",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "@types/uuid": "^10.0.0",
@@ -18,6 +19,9 @@
     "date-fns": "latest",
     "next": "15.2.4",
     "openai": "latest",
+    "pdf-lib": "latest",
+    "puppeteer": "latest",
+    "puppeteer-core": "latest",
     "react": "^19",
     "react-dom": "^19",
     "uuid": "latest",
