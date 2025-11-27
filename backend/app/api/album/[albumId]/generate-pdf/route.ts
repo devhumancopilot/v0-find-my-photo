@@ -68,7 +68,7 @@ export async function POST(
     // If we're still getting localhost in production, use the known Render URL as fallback
     if (host.includes('localhost') && process.env.NODE_ENV === 'production') {
       protocol = 'https'
-      host = 'v0-find-my-photo-v2.onrender.com'
+      host = 'v0-find-my-photo-v2.onrender.com'  // Frontend URL
       console.log(`[PDF Generator] Detected localhost in production, using fallback URL`)
     }
 

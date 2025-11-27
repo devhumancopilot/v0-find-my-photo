@@ -1,7 +1,7 @@
 services:
   # Backend API Server
   - type: web
-    name: v0-find-my-photo-v2-backend
+    name: v0-find-my-photo-backend
     runtime: node
     region: oregon
     plan: free
@@ -58,7 +58,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_URL
-        value: https://v0-find-my-photo-v2-backend.onrender.com
+        value: https://v0-find-my-photo-backend.onrender.com
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
