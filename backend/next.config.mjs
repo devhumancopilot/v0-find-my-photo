@@ -19,11 +19,8 @@ const nextConfig = {
 
   // CORS headers for frontend access
   async headers() {
-    const allowedOrigins = [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'https://v0-find-my-photo.onrender.com',
-      'http://localhost:3000', // For local development
-    ].filter(Boolean)
+    // IMPORTANT: Access-Control-Allow-Origin can only be a single origin, not comma-separated
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
 
     return [
       {
@@ -35,7 +32,7 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Origin',
-            value: allowedOrigins.join(','),
+            value: frontendUrl,
           },
           {
             key: 'Access-Control-Allow-Methods',
