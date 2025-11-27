@@ -29,14 +29,8 @@ const nextConfig = {
     cpus: 1,
   },
 
-  // Use standalone output
-  output: 'standalone',
-
   // Disable source maps in production
   productionBrowserSourceMaps: false,
-
-  // Optimize bundle
-  swcMinify: true,
 
   // Reduce webpack memory usage
   webpack: (config, { isServer }) => {
