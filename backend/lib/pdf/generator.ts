@@ -466,9 +466,18 @@ export async function generateAlbumPDFFromPreview(
 
     // Launch Puppeteer with appropriate configuration
     if (isProduction) {
-      // Use puppeteer-core with chromium for serverless
+      // Use puppeteer-core with chromium for serverless with aggressive memory optimization
       browser = await puppeteerCore.launch({
-        args: chromium.args,
+        args: [
+          ...chromium.args,
+          '--disable-dev-shm-usage', // Use /tmp instead of /dev/shm
+          '--disable-accelerated-2d-canvas', // Reduce GPU memory
+          '--disable-gpu', // Disable GPU
+          '--single-process', // Run in single process to save memory
+          '--no-zygote', // Disable zygote process
+          '--disable-setuid-sandbox', // Disable sandbox
+          '--disable-web-security', // Allow CORS for local images
+        ],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -488,11 +497,11 @@ export async function generateAlbumPDFFromPreview(
 
     const page = await browser.newPage()
 
-    // Set viewport for high-resolution rendering
+    // Set viewport optimized for Render 512MB memory limit
     await page.setViewport({
-      width: 2550, // 8.5 inches at 300 DPI
-      height: 3300, // 11 inches at 300 DPI
-      deviceScaleFactor: 2, // High resolution for print quality
+      width: 1700, // 8.5 inches at 200 DPI (reduced from 300 DPI)
+      height: 2200, // 11 inches at 200 DPI
+      deviceScaleFactor: 1, // Reduced from 2 to save memory
     })
 
     // Set authentication cookies if provided
@@ -567,7 +576,7 @@ export async function generateAlbumPDFFromPreview(
     for (let i = 0; i < pageElements.length; i++) {
       const screenshot = await pageElements[i].screenshot({
         type: 'jpeg',
-        quality: 95,
+        quality: 75, // Reduced from 95 to save memory on Render
       })
       screenshots.push(Buffer.from(screenshot))
       console.log(`[PDF Generator] Screenshot ${i + 1}/${pageElements.length} captured`)
