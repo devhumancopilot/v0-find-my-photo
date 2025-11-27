@@ -1,10 +1,16 @@
-import { updateSession } from "@/lib/supabase/middleware"
-import type { NextRequest } from "next/server"
+import type { NextRequest, NextResponse } from "next/server"
 
 export async function middleware(request: NextRequest) {
-  return await updateSession(request)
+  // Backend API server - no session management needed
+  // API routes handle auth via headers/tokens
+  // Just pass through all requests
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Only run on non-API routes (just the status page)
+  // API routes should not have middleware interference
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 }
