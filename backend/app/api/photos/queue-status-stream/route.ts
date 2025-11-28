@@ -11,6 +11,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server"
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 180 // 3 minutes - Render memory optimization
 
 export async function GET(request: NextRequest) {
   // Verify authentication
@@ -33,31 +34,21 @@ export async function GET(request: NextRequest) {
       // Function to send queue status
       const sendStatus = async () => {
         try {
-          // Get pending count
-          const { count: pendingCount } = await serviceSupabase
+          // Optimized: Get all counts in one query using aggregate
+          const { data: statusData } = await serviceSupabase
             .from('photo_processing_queue')
-            .select('*', { count: 'exact', head: true })
+            .select('status')
             .eq('user_id', userId)
-            .eq('status', 'pending')
 
-          // Get processing count
-          const { count: processingCount } = await serviceSupabase
-            .from('photo_processing_queue')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('status', 'processing')
-
-          // Get completed count (for total progress tracking)
-          const { count: completedCount } = await serviceSupabase
-            .from('photo_processing_queue')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('status', 'completed')
+          // Count statuses in memory (much faster than 3 separate queries)
+          const pendingCount = statusData?.filter(item => item.status === 'pending').length || 0
+          const processingCount = statusData?.filter(item => item.status === 'processing').length || 0
+          const completedCount = statusData?.filter(item => item.status === 'completed').length || 0
 
           const data = {
-            pending_count: pendingCount || 0,
-            processing_count: processingCount || 0,
-            completed_count: completedCount || 0,
+            pending_count: pendingCount,
+            processing_count: processingCount,
+            completed_count: completedCount,
             timestamp: new Date().toISOString(),
           }
 
@@ -99,12 +90,12 @@ export async function GET(request: NextRequest) {
           controller.close()
         })
 
-        // Timeout after 10 minutes (Vercel limit)
+        // Timeout after 3 minutes (Render memory optimization)
         setTimeout(() => {
           console.log('[SSE] Timeout reached, closing stream')
           clearInterval(intervalId)
           controller.close()
-        }, 10 * 60 * 1000)
+        }, 3 * 60 * 1000) // 3 minutes instead of 10
       }
     },
   })
