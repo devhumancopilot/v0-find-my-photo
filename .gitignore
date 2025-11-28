@@ -28,3 +28,6 @@ next-env.d.ts
 
 
 .claude
+
+# Backend is now a separate repository
+backend/
