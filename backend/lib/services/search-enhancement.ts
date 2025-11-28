@@ -403,7 +403,7 @@ export async function reRankWithVisionReasoning(
   })
 
   const matchingPhotos = results.filter(p => {
-    if (!p.visionResult) return true // Keep if vision failed
+    if (!p.visionResult) return false // Exclude if vision failed - vision is final authority
     return p.visionResult.matches && p.visionResult.confidence >= minConfidence
   })
 

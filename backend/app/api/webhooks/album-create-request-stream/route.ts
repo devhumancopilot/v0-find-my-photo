@@ -167,10 +167,10 @@ export async function POST(request: NextRequest) {
           const enableVisionReasoning = process.env.ENABLE_VISION_RERANKING !== "false"
 
           if (enableVisionReasoning) {
-            // OPTIMIZATION FOR VERCEL HOBBY: Only validate top N photos to stay under 10s timeout
+            // Vision reasoning is FINAL AUTHORITY - only return photos explicitly approved by vision
+            // Process up to VISION_MAX_PHOTOS to balance cost/performance, but exclude unvalidated photos
             const maxVisionPhotos = parseInt(process.env.VISION_MAX_PHOTOS || "20", 10)
             const photosToValidate = enhancedPhotos.slice(0, maxVisionPhotos)
-            const photosToSkip = enhancedPhotos.slice(maxVisionPhotos)
 
             if (photosToValidate.length > 0) {
               sendSSE(controller, "progress", {
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
                 educational: "Using advanced AI to ensure the best matches",
               })
 
-              // Apply vision reasoning only to top N photos with progress callback
+              // Apply vision reasoning with progress callback
               const visionFilteredPhotos = await reRankWithVisionReasoning(
                 photosToValidate,
                 query,
@@ -195,11 +195,10 @@ export async function POST(request: NextRequest) {
                 }
               )
 
-              // Combine validated photos + remaining unvalidated photos
-              // Validated photos go first (they're the most relevant and AI-verified)
-              photos = [...visionFilteredPhotos, ...photosToSkip]
+              // Only return vision-validated photos (vision is final authority)
+              photos = visionFilteredPhotos
 
-              console.log(`[Vision] Validated ${visionFilteredPhotos.length}/${enhancedPhotos.length} photos (skipped ${photosToSkip.length})`)
+              console.log(`[Vision] Validated ${visionFilteredPhotos.length}/${photosToValidate.length} photos (excluded ${photosToValidate.length - visionFilteredPhotos.length} mismatches)`)
             } else {
               photos = enhancedPhotos
             }
