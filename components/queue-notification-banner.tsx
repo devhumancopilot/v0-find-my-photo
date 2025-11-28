@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Sparkles, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { getBackendAPIURL } from "@/lib/config"
 
 interface QueueNotificationBannerProps {
   pendingCount: number
@@ -70,7 +71,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
       console.log('[Queue Banner] Starting SSE connection for real-time updates')
 
       // Create EventSource connection
-      eventSourceRef.current = new EventSource('/api/photos/queue-status-stream')
+      eventSourceRef.current = new EventSource(getBackendAPIURL('/api/photos/queue-status-stream'))
 
       eventSourceRef.current.onmessage = (event) => {
         try {
@@ -169,7 +170,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
         abortControllerRef.current?.abort()
       }, REQUEST_TIMEOUT)
 
-      const response = await fetch('/api/photos/process-queue-worker', {
+      const response = await fetch(getBackendAPIURL('/api/photos/process-queue-worker'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
