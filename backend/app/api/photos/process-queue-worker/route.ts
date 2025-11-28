@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
     // Process photos in a loop until queue empty or timeout approaching
     while (Date.now() - startTime < MAX_RUNTIME) {
       try {
-        // Check for pending photos
+        // ATOMIC CLAIM: Get first pending photo and mark as processing in one operation
+        // This prevents multiple workers from processing the same photo
         const { data: pendingPhotos, error: pendingError } = await serviceSupabase
           .from('photo_processing_queue')
           .select('id, photo_id')
@@ -80,14 +81,23 @@ export async function POST(request: NextRequest) {
 
         const queueItem = pendingPhotos[0]
 
-        // Mark as processing
-        await serviceSupabase
+        // Atomic claim: Update ONLY if still pending (prevents race conditions)
+        const { data: claimed, error: claimError } = await serviceSupabase
           .from('photo_processing_queue')
           .update({
             status: 'processing',
             processing_started_at: new Date().toISOString(),
           })
           .eq('id', queueItem.id)
+          .eq('status', 'pending') // Only update if still pending
+          .select()
+
+        // If no rows updated, another worker claimed it - skip to next
+        if (!claimed || claimed.length === 0) {
+          console.log('[Worker] Photo already claimed by another worker, skipping...')
+          await sleep(500) // Brief delay before trying next photo
+          continue
+        }
 
         console.log(`[Worker] Processing photo ${queueItem.photo_id} (${totalProcessed + 1} total)`)
 
