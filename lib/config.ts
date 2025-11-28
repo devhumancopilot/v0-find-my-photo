@@ -1,7 +1,9 @@
 /**
  * Application Configuration
- * Centralized config for backend API URL
+ * Centralized config for backend API URL with auth token support
  */
+
+import { createClient } from '@/lib/supabase/client'
 
 /**
  * Get the backend API URL
@@ -25,4 +27,36 @@ export function getBackendAPIURL(path: string): string {
   const baseURL = getBackendURL()
   const cleanPath = path.startsWith('/') ? path : `/${path}`
   return `${baseURL}${cleanPath}`
+}
+
+/**
+ * Get the Supabase access token for authenticated requests
+ * @returns Access token or null if not authenticated
+ */
+export async function getAuthToken(): Promise<string | null> {
+  try {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token || null
+  } catch (error) {
+    console.error('[Auth] Failed to get access token:', error)
+    return null
+  }
+}
+
+/**
+ * Get headers for authenticated backend requests
+ * Includes Authorization header with Supabase access token
+ * @returns Headers object with auth token
+ */
+export async function getAuthHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken()
+
+  if (token) {
+    return {
+      'Authorization': `Bearer ${token}`,
+    }
+  }
+
+  return {}
 }

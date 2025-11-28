@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -302,12 +302,13 @@ export default function SettingsPage() {
       const browserInfo = `${navigator.userAgent}`
 
       // Submit bug report
+      const authHeaders = await getAuthHeaders()
       const response = await fetch(getBackendAPIURL("/api/bug-reports"), {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...authHeaders,
         },
-        credentials: "include",
         body: JSON.stringify({
           title: bugTitle,
           description: bugDescription,

@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { getBackendAPIURL } from '@/lib/config';
+import { getBackendAPIURL, getAuthHeaders } from '@/lib/config';
 
 interface PickedMediaItem {
   id: string;
@@ -81,9 +81,12 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
 
     try {
       // Step 1: Create picker session
+      const authHeaders = await getAuthHeaders();
       const createResponse = await fetch(getBackendAPIURL('/api/google-photos/create-session'), {
         method: 'POST',
-        credentials: 'include',
+        headers: {
+          ...authHeaders,
+        },
       });
 
       if (!createResponse.ok) {

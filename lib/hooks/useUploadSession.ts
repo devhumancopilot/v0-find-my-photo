@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { getBackendAPIURL } from '@/lib/config';
+import { getBackendAPIURL, getAuthHeaders } from '@/lib/config';
 
 export interface ChunkProgress {
   index: number;
@@ -277,10 +277,13 @@ function clearSessionFromStorage() {
 // Helper function for database persistence
 async function saveSessionToDatabase(session: UploadSessionState) {
   try {
+    const authHeaders = await getAuthHeaders();
     const response = await fetch(getBackendAPIURL('/api/upload/session'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
       body: JSON.stringify({
         session_id: session.sessionId,
         total_photos: session.totalPhotos,

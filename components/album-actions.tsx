@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -27,12 +27,13 @@ export function AlbumActions({ albumId, albumTitle, photoCount }: AlbumActionsPr
     setIsDeleting(true)
 
     try {
+      const authHeaders = await getAuthHeaders()
       const response = await fetch(getBackendAPIURL("/api/albums/delete"), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
         },
-        credentials: "include",
         body: JSON.stringify({ albumId }),
       })
 

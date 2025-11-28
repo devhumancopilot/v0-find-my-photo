@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 import {
   Dialog,
   DialogContent,
@@ -84,8 +84,11 @@ export function PrintOrderDialog({
   const loadProducts = async () => {
     try {
       setLoading(true)
+      const authHeaders = await getAuthHeaders()
       const response = await fetch(getBackendAPIURL("/api/gelato/products"), {
-        credentials: "include"
+        headers: {
+          ...authHeaders,
+        },
       })
       const data = await response.json()
 
@@ -117,10 +120,13 @@ export function PrintOrderDialog({
       setQuoteLoading(true)
       setError("")
 
+      const authHeaders = await getAuthHeaders()
       const response = await fetch(getBackendAPIURL("/api/gelato/quote"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
         body: JSON.stringify({
           productUid: selectedProduct,
           pageCount,
@@ -153,11 +159,15 @@ export function PrintOrderDialog({
       setError("")
       setGeneratingPDF(true)
 
+      const authHeaders = await getAuthHeaders()
+
       // Step 1: Generate PDF from album
       const pdfResponse = await fetch(getBackendAPIURL("/api/gelato/generate-pdf"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
         body: JSON.stringify({
           albumId,
           layoutTemplate,
@@ -176,8 +186,10 @@ export function PrintOrderDialog({
       // Step 2: Place order with Gelato
       const response = await fetch(getBackendAPIURL("/api/gelato/order"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
         body: JSON.stringify({
           albumId,
           productUid: selectedProduct,

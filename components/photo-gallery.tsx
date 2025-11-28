@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FavoriteButton } from "@/components/favorite-button"
@@ -74,12 +74,13 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
     setIsDeleting(true)
 
     try {
+      const authHeaders = await getAuthHeaders()
       const response = await fetch(getBackendAPIURL("/api/photos/delete"), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
         },
-        credentials: "include",
         body: JSON.stringify({ photoId: photoToDelete.id }),
       })
 

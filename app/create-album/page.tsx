@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Sparkles, ArrowLeft, ArrowRight, Loader2, ImageIcon, Calendar, Check, X, Upload } from "lucide-react"
 import { useSearchStream } from "@/hooks/use-search-stream"
 import { SearchProgressLoader } from "@/components/search-progress-loader"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 
 type Step = 1 | 2 | 3
 
@@ -85,12 +85,13 @@ export default function CreateAlbumPage() {
       // Finalize album - send to n8n via backend
       setIsProcessing(true)
       try {
+        const authHeaders = await getAuthHeaders()
         const response = await fetch(getBackendAPIURL("/api/webhooks/album-finalized"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...authHeaders,
           },
-          credentials: "include",
           body: JSON.stringify({
             albumTitle: albumTitle,
             photoIds: selectedPhotos, // Array of photo IDs like [14, 15, 16]

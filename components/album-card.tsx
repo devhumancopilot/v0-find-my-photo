@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 import { FavoriteButton } from "@/components/favorite-button"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { LoadingLink } from "@/components/loading-link"
@@ -38,12 +38,13 @@ export function AlbumCard({ album }: AlbumCardProps) {
     setIsDeleting(true)
 
     try {
+      const authHeaders = await getAuthHeaders()
       const response = await fetch(getBackendAPIURL("/api/albums/delete"), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
         },
-        credentials: "include",
         body: JSON.stringify({ albumId: album.id }),
       })
 
