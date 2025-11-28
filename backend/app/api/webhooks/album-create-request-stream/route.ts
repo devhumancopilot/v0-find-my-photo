@@ -90,6 +90,10 @@ export async function POST(request: NextRequest) {
 
         let allPhotos: any[]
 
+        // Layer 1: Embedding similarity search
+        // Get more candidates for vision layer to filter (configurable via env)
+        const LAYER1_PHOTO_LIMIT = parseInt(process.env.LAYER1_PHOTO_LIMIT || "100", 10)
+
         if (query) {
           // CLIP text-to-image search
           const embeddingClip = await generateCLIPTextEmbedding(query)
@@ -108,7 +112,7 @@ export async function POST(request: NextRequest) {
             embeddingClip,
             embeddingClip,
             user.id,
-            50,
+            LAYER1_PHOTO_LIMIT,
             MIN_CLIP_SCORE,
             REFERENCE_WEIGHT,
             NUM_REFERENCES,
@@ -124,7 +128,7 @@ export async function POST(request: NextRequest) {
           const searchEmbedding = prepareEmbeddingForStorage(embedding)
 
           const { matchPhotos } = await import("@/lib/services/database")
-          allPhotos = await matchPhotos(searchEmbedding, user.id, 50, serviceSupabase)
+          allPhotos = await matchPhotos(searchEmbedding, user.id, LAYER1_PHOTO_LIMIT, serviceSupabase)
         } else {
           throw new Error("No query or image provided")
         }
