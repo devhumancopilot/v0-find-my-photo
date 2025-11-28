@@ -150,6 +150,11 @@ export function useSearchStream(): UseSearchStreamReturn {
                   setIsSearching(false)
                   break
 
+                case "ping":
+                  // Heartbeat to keep connection alive - no action needed
+                  console.log("[SearchStream] Heartbeat received")
+                  break
+
                 default:
                   console.warn("[SearchStream] Unknown event:", event)
               }

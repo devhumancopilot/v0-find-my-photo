@@ -30,6 +30,10 @@ import {
 import { detectFaces } from "@/lib/services/face-detection"
 import { insertFaceProfile, matchFaces } from "@/lib/services/database"
 
+// Timeout configuration for Render deployment
+// Queue processing can take time (caption generation, embeddings, face detection)
+export const maxDuration = 300 // 5 minutes per photo
+
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
@@ -44,6 +48,36 @@ export async function POST(request: NextRequest) {
 
     // Use service role client for database operations
     const serviceSupabase = createServiceRoleClient()
+
+    // STEP 0: Reset stale 'processing' items (stuck > 5 minutes)
+    // This handles recovery from crashed/timed-out processors
+    const STALE_TIMEOUT_MINUTES = 5
+    const staleThreshold = new Date(Date.now() - STALE_TIMEOUT_MINUTES * 60 * 1000).toISOString()
+
+    const { data: staleItems, error: staleError } = await serviceSupabase
+      .from('photo_processing_queue')
+      .select('id, photo_id')
+      .eq('user_id', userId)
+      .eq('status', 'processing')
+      .lt('processing_started_at', staleThreshold)
+
+    if (!staleError && staleItems && staleItems.length > 0) {
+      console.log(`[Process Queue] Found ${staleItems.length} stale processing items (stuck > ${STALE_TIMEOUT_MINUTES} min), resetting to pending...`)
+
+      await serviceSupabase
+        .from('photo_processing_queue')
+        .update({
+          status: 'pending',
+          processing_started_at: null,
+          retry_count: serviceSupabase.raw('retry_count + 1'),
+          error_message: `Reset from stale processing state (stuck > ${STALE_TIMEOUT_MINUTES} minutes)`
+        })
+        .eq('user_id', userId)
+        .eq('status', 'processing')
+        .lt('processing_started_at', staleThreshold)
+
+      console.log(`[Process Queue] Reset ${staleItems.length} stale items to pending`)
+    }
 
     // STEP 1: Look for an existing 'processing' item for this user
     // Design: Only ONE 'processing' item per user at a time
@@ -142,7 +176,7 @@ export async function POST(request: NextRequest) {
       hasMore = true
     }
 
-    // STEP 5: Trigger next process if needed
+    // STEP 5: Trigger next process if needed with retry logic
     if (hasMore) {
       console.log(`[Process Queue] Marked next item as processing, triggering next process...`)
 
@@ -151,17 +185,52 @@ export async function POST(request: NextRequest) {
       const baseUrl = `${protocol}://${host}`
       const apiUrl = `${baseUrl}/api/photos/process-queue`
 
-      fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cookie': request.headers.get('cookie') || '',
-        },
-      }).catch(error => {
-        console.error('[Process Queue] Failed to trigger next process:', error)
-      })
+      // Retry logic to prevent chain breaks
+      const MAX_RETRIES = 3
+      let retryCount = 0
+      let success = false
 
-      console.log(`[Process Queue] Next process triggered successfully`)
+      while (retryCount < MAX_RETRIES && !success) {
+        try {
+          if (retryCount > 0) {
+            const delay = Math.pow(2, retryCount - 1) * 1000 // 1s, 2s, 4s
+            console.log(`[Process Queue] Retry ${retryCount}/${MAX_RETRIES} after ${delay}ms delay`)
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
+
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cookie': request.headers.get('cookie') || '',
+            },
+            signal: AbortSignal.timeout(60000) // 60 second timeout
+          })
+
+          if (response.ok) {
+            success = true
+            console.log(`[Process Queue] Next process triggered successfully`)
+          } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+        } catch (error) {
+          retryCount++
+          console.error(`[Process Queue] Failed to trigger next process (attempt ${retryCount}/${MAX_RETRIES}):`, error)
+
+          if (retryCount >= MAX_RETRIES) {
+            // Max retries reached - reset the next photo back to pending to prevent stuck state
+            console.error(`[Process Queue] Max retries reached, resetting next photo to pending`)
+            await serviceSupabase
+              .from('photo_processing_queue')
+              .update({
+                status: 'pending',
+                processing_started_at: null,
+                error_message: 'Failed to trigger recursive processing - reset to pending'
+              })
+              .eq('id', nextPending[0].id)
+          }
+        }
+      }
     } else {
       console.log(`[Process Queue] No more photos to process - chain complete`)
     }

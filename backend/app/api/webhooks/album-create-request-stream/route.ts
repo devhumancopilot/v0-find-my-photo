@@ -235,8 +235,12 @@ export async function POST(request: NextRequest) {
           count: photos.length,
         })
 
-        // Clear heartbeat and close the stream
+        // Clear heartbeat
         clearInterval(heartbeat)
+
+        // Wait 100ms before closing to ensure complete event is fully transmitted
+        // This prevents race condition where stream closes before final event reaches client
+        await new Promise(resolve => setTimeout(resolve, 100))
         controller.close()
       } catch (error) {
         console.error("[Stream] Error:", error)
@@ -245,6 +249,9 @@ export async function POST(request: NextRequest) {
           details: error instanceof Error ? error.message : "Unknown error",
         })
         clearInterval(heartbeat)
+
+        // Wait 100ms before closing to ensure error event is fully transmitted
+        await new Promise(resolve => setTimeout(resolve, 100))
         controller.close()
       }
     },
