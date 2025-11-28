@@ -32,7 +32,6 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
 
   const router = useRouter()
   const abortControllerRef = useRef<AbortController | null>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
   const hasAutoStartedRef = useRef(false)
 
   // Update current counts when props change
@@ -70,39 +69,61 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
     if (isProcessing) {
       console.log('[Queue Banner] Starting SSE connection for real-time updates')
 
-      // Create EventSource connection
-      eventSourceRef.current = new EventSource(getBackendAPIURL('/api/photos/queue-status-stream'))
-
-      eventSourceRef.current.onmessage = (event) => {
+      // Use fetch-based SSE to support credentials
+      let isActive = true
+      const connectSSE = async () => {
         try {
-          const data = JSON.parse(event.data)
-          console.log('[Queue Banner] SSE update:', data)
+          const response = await fetch(getBackendAPIURL('/api/photos/queue-status-stream'), {
+            credentials: 'include',
+          })
 
-          setCurrentPendingCount(data.pending_count)
-          setCurrentProcessingCount(data.processing_count)
+          if (!response.ok) {
+            throw new Error(`SSE connection failed: ${response.status}`)
+          }
+
+          const reader = response.body?.getReader()
+          const decoder = new TextDecoder()
+
+          if (!reader) {
+            throw new Error('No readable stream available')
+          }
+
+          let buffer = ''
+
+          while (isActive) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n\n')
+            buffer = lines.pop() || ''
+
+            for (const line of lines) {
+              if (!line.trim()) continue
+
+              const dataMatch = line.match(/^data: (.+)$/m)
+              if (dataMatch) {
+                try {
+                  const data = JSON.parse(dataMatch[1])
+                  console.log('[Queue Banner] SSE update:', data)
+                  setCurrentPendingCount(data.pending_count)
+                  setCurrentProcessingCount(data.processing_count)
+                } catch (error) {
+                  console.error('[Queue Banner] Error parsing SSE data:', error)
+                }
+              }
+            }
+          }
         } catch (error) {
-          console.error('[Queue Banner] Error parsing SSE data:', error)
+          console.error('[Queue Banner] SSE error:', error)
         }
       }
 
-      eventSourceRef.current.onerror = (error) => {
-        console.error('[Queue Banner] SSE error:', error)
-        eventSourceRef.current?.close()
-        eventSourceRef.current = null
-      }
-    } else {
-      // Close SSE connection when not processing
-      if (eventSourceRef.current) {
-        console.log('[Queue Banner] Closing SSE connection')
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
-      }
-    }
+      connectSSE()
 
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
+      return () => {
+        isActive = false
+        console.log('[Queue Banner] Closing SSE connection')
       }
     }
   }, [isProcessing])
