@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import type { ChunkProgress } from '@/lib/hooks/useUploadSession';
+import { getBackendAPIURL } from '@/lib/config';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 3000, 10000]; // 1s, 3s, 10s exponential backoff
@@ -229,9 +230,10 @@ async function saveChunkToDatabase(
   photos: Array<{ photoId: string; storageUrl: string; filename: string; size: number; type: string }>
 ): Promise<{ success: boolean; photoIds: number[]; errors: string[] }> {
   try {
-    const response = await fetch('/api/photos/save-storage', {
+    const response = await fetch(getBackendAPIURL('/api/photos/save-storage'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         photos: photos.map((p) => ({
           name: p.filename,

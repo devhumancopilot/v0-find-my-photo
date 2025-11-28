@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { getBackendAPIURL } from "@/lib/config"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Sparkles, Upload, Cloud, ImageIcon, ArrowRight, ArrowLeft } from "lucide-react"
@@ -29,9 +30,10 @@ export default function OnboardingPage() {
     } else {
       setIsLoading(true)
       try {
-        const response = await fetch("/api/webhooks/onboarding-completed", {
+        const response = await fetch(getBackendAPIURL("/api/webhooks/onboarding-completed"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ selectedSources }),
         })
 

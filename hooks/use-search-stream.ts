@@ -52,6 +52,7 @@ export function useSearchStream(): UseSearchStreamReturn {
           headers: {
             "Content-Type": "application/json",
           },
+          credentials: "include",
           body: JSON.stringify(params),
           signal: abortControllerRef.current.signal,
         })

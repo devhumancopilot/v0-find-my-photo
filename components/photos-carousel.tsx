@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { getBackendAPIURL } from "@/lib/config"
 import { Badge } from "@/components/ui/badge"
 import { FavoriteButton } from "@/components/favorite-button"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
@@ -83,11 +84,12 @@ export function PhotosCarousel({ photos, isLoading = false }: PhotosCarouselProp
     setIsDeleting(true)
 
     try {
-      const response = await fetch("/api/photos/delete", {
+      const response = await fetch(getBackendAPIURL("/api/photos/delete"), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({ photoId: photoToDelete.id }),
       })
 

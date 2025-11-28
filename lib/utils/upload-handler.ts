@@ -1,4 +1,5 @@
 import { uploadAllChunksToSupabase } from './supabase-chunked-upload';
+import { getBackendAPIURL } from '@/lib/config';
 
 /**
  * Helper function to sleep for a given duration (for retry backoff)
@@ -187,9 +188,10 @@ export async function uploadPhotosWithFormData(
           abortController.abort();
         }, 90000);
 
-        const response = await fetch('/api/photos/upload', {
+        const response = await fetch(getBackendAPIURL('/api/photos/upload'), {
           method: 'POST',
           body: formData,
+          credentials: 'include',
           signal: abortController.signal,
         });
 

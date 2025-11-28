@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
+import { getBackendAPIURL } from "@/lib/config"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FavoriteButton } from "@/components/favorite-button"
@@ -73,11 +74,12 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
     setIsDeleting(true)
 
     try {
-      const response = await fetch("/api/photos/delete", {
+      const response = await fetch(getBackendAPIURL("/api/photos/delete"), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({ photoId: photoToDelete.id }),
       })
 

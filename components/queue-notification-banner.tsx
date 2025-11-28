@@ -175,6 +175,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         signal: abortControllerRef.current.signal,
       })
 
