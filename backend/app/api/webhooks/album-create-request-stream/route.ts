@@ -9,6 +9,7 @@ import { NextRequest } from "next/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const maxDuration = 300 // 5 minutes for AI vision processing
 
 // Helper to send SSE events
 function sendSSE(controller: ReadableStreamDefaultController, event: string, data: any) {
@@ -49,6 +50,15 @@ export async function POST(request: NextRequest) {
   // Create streaming response
   const stream = new ReadableStream({
     async start(controller) {
+      // Setup heartbeat to keep connection alive (especially important on Render)
+      const heartbeat = setInterval(() => {
+        try {
+          sendSSE(controller, "ping", { timestamp: Date.now() })
+        } catch (error) {
+          clearInterval(heartbeat)
+        }
+      }, 20000) // Every 20 seconds
+
       try {
         // Send initial event
         sendSSE(controller, "start", {
@@ -225,7 +235,8 @@ export async function POST(request: NextRequest) {
           count: photos.length,
         })
 
-        // Close the stream
+        // Clear heartbeat and close the stream
+        clearInterval(heartbeat)
         controller.close()
       } catch (error) {
         console.error("[Stream] Error:", error)
@@ -233,6 +244,7 @@ export async function POST(request: NextRequest) {
           error: "Internal server error",
           details: error instanceof Error ? error.message : "Unknown error",
         })
+        clearInterval(heartbeat)
         controller.close()
       }
     },

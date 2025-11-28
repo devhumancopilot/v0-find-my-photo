@@ -17,6 +17,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 
+// Timeout configuration for Render deployment
+export const maxDuration = 120 // 2 minutes for batch uploads
+
 // Helper function to extract filename without folder path
 function getBaseName(filename: string): string {
   // Remove folder paths (handles both / and \ separators)

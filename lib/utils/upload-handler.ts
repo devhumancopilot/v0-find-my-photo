@@ -1,5 +1,33 @@
 import { uploadAllChunksToSupabase } from './supabase-chunked-upload';
 
+/**
+ * Helper function to sleep for a given duration (for retry backoff)
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Check if error is retryable (network/timeout errors, not validation errors)
+ */
+function isRetryableError(error: any, statusCode?: number): boolean {
+  // Don't retry client errors (400-499) except 408 (timeout) and 429 (rate limit)
+  if (statusCode && statusCode >= 400 && statusCode < 500) {
+    return statusCode === 408 || statusCode === 429;
+  }
+
+  // Retry on network errors and timeouts
+  if (error instanceof Error) {
+    return error.name === 'AbortError' ||
+           error.message.includes('network') ||
+           error.message.includes('timeout') ||
+           error.message.includes('fetch');
+  }
+
+  // Retry on server errors (500+) and unknown errors
+  return true;
+}
+
 export interface UploadResult {
   success: boolean;
   uploaded_count: number;
@@ -138,32 +166,74 @@ export async function uploadPhotosWithFormData(
       }
     }
 
-    // Upload batch
-    try {
-      const response = await fetch('/api/photos/upload', {
-        method: 'POST',
-        body: formData,
-      });
+    // Upload batch with retry logic and timeout protection
+    const MAX_RETRIES = 3;
+    let retryCount = 0;
+    let batchSuccess = false;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[FormData Upload] Batch ${batchNumber} upload failed:`, response.status, errorText);
-        totalFailed += batch.length;
-        throw new Error(`Batch upload failed: ${errorText}`);
+    while (retryCount <= MAX_RETRIES && !batchSuccess) {
+      try {
+        if (retryCount > 0) {
+          // Exponential backoff: 1s, 2s, 4s
+          const delay = Math.pow(2, retryCount - 1) * 1000;
+          console.log(`[FormData Upload] Retrying batch ${batchNumber} (attempt ${retryCount + 1}/${MAX_RETRIES + 1}) after ${delay}ms`);
+          await sleep(delay);
+        }
+
+        // Create abort controller for timeout (90s - less than backend's 120s limit)
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => {
+          console.warn(`[FormData Upload] Batch ${batchNumber} timeout after 90s`);
+          abortController.abort();
+        }, 90000);
+
+        const response = await fetch('/api/photos/upload', {
+          method: 'POST',
+          body: formData,
+          signal: abortController.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          const shouldRetry = isRetryableError(new Error(errorText), response.status);
+
+          if (!shouldRetry || retryCount >= MAX_RETRIES) {
+            console.error(`[FormData Upload] Batch ${batchNumber} upload failed (non-retryable or max retries):`, response.status, errorText);
+            totalFailed += batch.length;
+            break; // Exit retry loop
+          }
+
+          throw new Error(`Batch upload failed: ${errorText}`);
+        }
+
+        const result = await response.json();
+        const batchUploadedCount = result.uploaded_count || 0;
+        totalUploaded += batchUploadedCount;
+
+        // Update progress per photo actually uploaded (90-98% for upload completion)
+        const uploadProgress = 90 + ((totalUploaded / allPhotosToUpload.length) * 8);
+        onProgress?.(totalUploaded, allPhotosToUpload.length, Math.min(uploadProgress, 98));
+
+        console.log(`[FormData Upload] Batch ${batchNumber} uploaded successfully:`, result);
+        batchSuccess = true;
+      } catch (error) {
+        const shouldRetry = isRetryableError(error);
+
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.error(`[FormData Upload] Batch ${batchNumber} timed out after 90s`);
+        } else {
+          console.error(`[FormData Upload] Batch ${batchNumber} error:`, error);
+        }
+
+        if (!shouldRetry || retryCount >= MAX_RETRIES) {
+          totalFailed += batch.length;
+          break; // Exit retry loop
+        }
+
+        retryCount++;
       }
-
-      const result = await response.json();
-      const batchUploadedCount = result.uploaded_count || 0;
-      totalUploaded += batchUploadedCount;
-
-      // Update progress per photo actually uploaded (90-98% for upload completion)
-      const uploadProgress = 90 + ((totalUploaded / allPhotosToUpload.length) * 8);
-      onProgress?.(totalUploaded, allPhotosToUpload.length, Math.min(uploadProgress, 98));
-
-      console.log(`[FormData Upload] Batch ${batchNumber} uploaded successfully:`, result);
-    } catch (error) {
-      console.error(`[FormData Upload] Batch ${batchNumber} error:`, error);
-      // Continue with next batch even if this one fails
     }
   }
 
