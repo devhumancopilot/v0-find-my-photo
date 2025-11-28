@@ -15,7 +15,6 @@ import {
 import { Sparkles, Plus, ImageIcon, Clock, Heart, Settings, FolderOpen, Upload, Eye } from "lucide-react"
 import { PhotoGallery } from "@/components/photo-gallery"
 import { LogoutButton } from "@/components/logout-button"
-import { FaceProfilesSection } from "@/components/face-profiles-section"
 import { QueueNotificationBanner } from "@/components/queue-notification-banner"
 import { FavoriteButton } from "@/components/favorite-button"
 import { AlbumCard } from "@/components/album-card"
@@ -207,17 +206,6 @@ export default async function DashboardPage() {
             </Card>
           ))}
         </div>
-
-        {/* Face Profiles Section - Only show if face detection is enabled */}
-        {isFaceDetectionEnabled && (
-          <div className="mb-8">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-foreground">Face Recognition</h2>
-              <p className="text-sm text-muted-foreground">People detected in your photos</p>
-            </div>
-            <FaceProfilesSection />
-          </div>
-        )}
 
         {/* Quick Actions */}
         <div className="mb-8 grid gap-4 md:grid-cols-2">
