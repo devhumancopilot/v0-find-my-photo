@@ -10,8 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Sparkles, Upload, X, ImageIcon, Check, ArrowLeft, Image as ImageIconLucide, CheckCircle } from "lucide-react"
 import { GooglePhotosPicker } from "@/components/google-photos-picker"
 import { toast } from "sonner"
-import { uploadPhotosWithSupabaseChunked, uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
-import { ChunkedUploader } from "@/components/chunked-uploader"
+import { uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
 
 interface UploadedImage {
   id: string
@@ -43,8 +42,6 @@ export default function UploadPhotosPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentUploadingPhoto, setCurrentUploadingPhoto] = useState(0)
   const [totalPhotosToUpload, setTotalPhotosToUpload] = useState(0)
-  const [useChunkedUpload, setUseChunkedUpload] = useState(false)
-  const [chunkedUploadFiles, setChunkedUploadFiles] = useState<File[]>([])
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
 
   // Check for OAuth callback success
@@ -225,7 +222,7 @@ export default function UploadPhotosPage() {
     // Prepare all files
     const allFiles: File[] = uploadedImages.map(img => img.file)
 
-    // Fetch Google Photos and convert to Files for chunked upload
+    // Fetch Google Photos and convert to Files for upload
     if (googlePhotos.length > 0) {
       toast.info("Preparing Google Photos...", { duration: 2000 })
       for (const photo of googlePhotos) {
@@ -244,31 +241,17 @@ export default function UploadPhotosPage() {
       }
     }
 
-    // For large batches (>50 photos), use ChunkedUploader component with Supabase direct upload
-    if (allFiles.length > 50) {
-      console.log('[Upload] Large batch detected, using ChunkedUploader with Supabase Storage')
-      setChunkedUploadFiles(allFiles)
-      setUseChunkedUpload(true)
-      toast.info("Large Upload Detected", {
-        description: `Uploading ${allFiles.length} photos with advanced chunked upload system (direct to Supabase Storage).`,
-        duration: 3000,
-      })
-      return
-    }
-
-    // For smaller batches, use the regular upload flow
+    // Use backend API upload for all batch sizes (goes through separated backend server)
     setIsUploading(true)
     setUploadProgress(0)
     setCurrentUploadingPhoto(0)
     setTotalPhotosToUpload(totalPhotos)
 
     try {
-      let result;
+      // Use backend API upload for ALL uploads (goes through separated backend server)
+      console.log(`[Upload] Using backend API upload via /api/photos/upload for ${allFiles.length} photos`)
 
-      // Use backend API upload (goes through separated backend server)
-      console.log('[Upload] Using backend API upload via /api/photos/upload')
-
-      result = await uploadPhotosWithFormData(
+      const result = await uploadPhotosWithFormData(
         allFiles,
         googlePhotos,
         (current, total, progress) => {
@@ -339,60 +322,6 @@ export default function UploadPhotosPage() {
     }
   }
 
-  const handleChunkedUploadComplete = async (uploaded: number, failed: number) => {
-    console.log(`[Chunked Upload] Complete: ${uploaded} uploaded, ${failed} failed`)
-
-    // Clean up object URLs
-    uploadedImages.forEach((image) => {
-      URL.revokeObjectURL(image.preview)
-    })
-
-    // Clear session storage
-    sessionStorage.removeItem('pendingUploadCount')
-
-    setUploadedPhotoCount(uploaded)
-    setUseChunkedUpload(false)
-    setChunkedUploadFiles([])
-
-    if (uploaded > 0) {
-      // Show congratulations message
-      toast.success("🎉 Upload Complete!", {
-        description: `Successfully uploaded ${uploaded} photo${uploaded !== 1 ? "s" : ""}!`,
-        duration: 3000,
-      })
-
-      if (failed > 0) {
-        toast.warning("Some uploads had issues", {
-          description: `${failed} photo${failed !== 1 ? "s" : ""} failed to upload.`,
-          duration: 5000,
-        })
-      }
-
-      // Show countdown and redirect to dashboard
-      setRedirectCountdown(3)
-
-      // Countdown timer
-      const countdownInterval = setInterval(() => {
-        setRedirectCountdown((prev) => {
-          if (prev === null || prev <= 1) {
-            clearInterval(countdownInterval)
-            // Clear states and redirect
-            setUploadedImages([])
-            setGooglePhotos([])
-            router.push("/dashboard")
-            return null
-          }
-          return prev - 1
-        })
-      }, 1000)
-    }
-  }
-
-  const handleChunkedUploadCancel = () => {
-    setUseChunkedUpload(false)
-    setChunkedUploadFiles([])
-    toast.info("Upload cancelled")
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -640,17 +569,8 @@ export default function UploadPhotosPage() {
               </Card>
             )}
 
-            {/* Chunked Upload Progress */}
-            {useChunkedUpload && chunkedUploadFiles.length > 0 && (
-              <ChunkedUploader
-                files={chunkedUploadFiles}
-                onComplete={handleChunkedUploadComplete}
-                onCancel={handleChunkedUploadCancel}
-              />
-            )}
-
             {/* Upload Progress */}
-            {isUploading && !useChunkedUpload && (
+            {isUploading && (
               <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 backdrop-blur-sm">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
