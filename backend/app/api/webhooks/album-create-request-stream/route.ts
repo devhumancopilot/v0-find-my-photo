@@ -167,21 +167,18 @@ export async function POST(request: NextRequest) {
           const enableVisionReasoning = process.env.ENABLE_VISION_RERANKING !== "false"
 
           if (enableVisionReasoning) {
-            // Vision reasoning is FINAL AUTHORITY - only return photos explicitly approved by vision
-            // Process up to VISION_MAX_PHOTOS to balance cost/performance, but exclude unvalidated photos
-            const maxVisionPhotos = parseInt(process.env.VISION_MAX_PHOTOS || "20", 10)
-            const photosToValidate = enhancedPhotos.slice(0, maxVisionPhotos)
-
-            if (photosToValidate.length > 0) {
+            // Vision reasoning is FINAL AUTHORITY - process ALL photos from previous layers
+            // Each photo must be explicitly approved by GPT-4 Vision to be included in results
+            if (enhancedPhotos.length > 0) {
               sendSSE(controller, "progress", {
                 stage: "vision_start",
-                message: `Almost there! Checking ${photosToValidate.length} photo${photosToValidate.length === 1 ? '' : 's'} with AI vision...`,
+                message: `Almost there! Checking all ${enhancedPhotos.length} photo${enhancedPhotos.length === 1 ? '' : 's'} with AI vision...`,
                 educational: "Using advanced AI to ensure the best matches",
               })
 
-              // Apply vision reasoning with progress callback
+              // Apply vision reasoning to ALL photos with progress callback
               const visionFilteredPhotos = await reRankWithVisionReasoning(
-                photosToValidate,
+                enhancedPhotos,
                 query,
                 (event) => {
                   // Stream vision progress events
@@ -198,7 +195,7 @@ export async function POST(request: NextRequest) {
               // Only return vision-validated photos (vision is final authority)
               photos = visionFilteredPhotos
 
-              console.log(`[Vision] Validated ${visionFilteredPhotos.length}/${photosToValidate.length} photos (excluded ${photosToValidate.length - visionFilteredPhotos.length} mismatches)`)
+              console.log(`[Vision] Validated ${visionFilteredPhotos.length}/${enhancedPhotos.length} photos (excluded ${enhancedPhotos.length - visionFilteredPhotos.length} mismatches)`)
             } else {
               photos = enhancedPhotos
             }
