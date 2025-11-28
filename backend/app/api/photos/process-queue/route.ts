@@ -153,94 +153,23 @@ export async function POST(request: NextRequest) {
     // STEP 3: Process the photo
     const results = await processQueueInBackground(userId, queueItems, serviceSupabase)
 
-    // STEP 4: After processing, mark next 'pending' item as 'processing'
-    const { data: nextPending, error: nextError } = await serviceSupabase
+    // STEP 4: Check if there are more pending items
+    const { count: pendingCount } = await serviceSupabase
       .from('photo_processing_queue')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-      .limit(1)
 
-    let hasMore = false
-    if (!nextError && nextPending && nextPending.length > 0) {
-      // Mark the next item as 'processing'
-      await serviceSupabase
-        .from('photo_processing_queue')
-        .update({
-          status: 'processing',
-          processing_started_at: new Date().toISOString(),
-        })
-        .eq('id', nextPending[0].id)
+    const hasMore = (pendingCount || 0) > 0
 
-      hasMore = true
-    }
-
-    // STEP 5: Trigger next process if needed with retry logic
-    if (hasMore) {
-      console.log(`[Process Queue] Marked next item as processing, triggering next process...`)
-
-      const protocol = request.headers.get('x-forwarded-proto') || 'http'
-      const host = request.headers.get('host') || 'localhost:3000'
-      const baseUrl = `${protocol}://${host}`
-      const apiUrl = `${baseUrl}/api/photos/process-queue`
-
-      // Retry logic to prevent chain breaks
-      const MAX_RETRIES = 3
-      let retryCount = 0
-      let success = false
-
-      while (retryCount < MAX_RETRIES && !success) {
-        try {
-          if (retryCount > 0) {
-            const delay = Math.pow(2, retryCount - 1) * 1000 // 1s, 2s, 4s
-            console.log(`[Process Queue] Retry ${retryCount}/${MAX_RETRIES} after ${delay}ms delay`)
-            await new Promise(resolve => setTimeout(resolve, delay))
-          }
-
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cookie': request.headers.get('cookie') || '',
-            },
-            signal: AbortSignal.timeout(60000) // 60 second timeout
-          })
-
-          if (response.ok) {
-            success = true
-            console.log(`[Process Queue] Next process triggered successfully`)
-          } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-          }
-        } catch (error) {
-          retryCount++
-          console.error(`[Process Queue] Failed to trigger next process (attempt ${retryCount}/${MAX_RETRIES}):`, error)
-
-          if (retryCount >= MAX_RETRIES) {
-            // Max retries reached - reset the next photo back to pending to prevent stuck state
-            console.error(`[Process Queue] Max retries reached, resetting next photo to pending`)
-            await serviceSupabase
-              .from('photo_processing_queue')
-              .update({
-                status: 'pending',
-                processing_started_at: null,
-                error_message: 'Failed to trigger recursive processing - reset to pending'
-              })
-              .eq('id', nextPending[0].id)
-          }
-        }
-      }
-    } else {
-      console.log(`[Process Queue] No more photos to process - chain complete`)
-    }
+    console.log(`[Process Queue] Processed 1 photo. Remaining: ${pendingCount || 0}`)
 
     return NextResponse.json({
       success: true,
       message: 'Processing completed',
-      queue_count: queueItems.length,
       processed_count: results.processedCount,
       failed_count: results.failedCount,
+      pending_count: pendingCount || 0,
       has_more: hasMore,
     })
   } catch (error) {
