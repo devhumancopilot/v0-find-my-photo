@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef } from "react"
 import type { SearchProgress } from "@/components/search-progress-loader"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 
 export interface SearchResult {
   success: boolean
@@ -47,12 +47,13 @@ export function useSearchStream(): UseSearchStreamReturn {
       try {
         console.log("[SearchStream] Starting search with params:", params)
 
+        const authHeaders = await getAuthHeaders()
         const response = await fetch(getBackendAPIURL("/api/webhooks/album-create-request-stream"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...authHeaders,
           },
-          credentials: "include",
           body: JSON.stringify(params),
           signal: abortControllerRef.current.signal,
         })

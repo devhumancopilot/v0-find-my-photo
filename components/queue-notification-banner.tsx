@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Sparkles, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 
 interface QueueNotificationBannerProps {
   pendingCount: number
@@ -69,12 +69,15 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
     if (isProcessing) {
       console.log('[Queue Banner] Starting SSE connection for real-time updates')
 
-      // Use fetch-based SSE to support credentials
+      // Use fetch-based SSE to support authentication
       let isActive = true
       const connectSSE = async () => {
         try {
+          const authHeaders = await getAuthHeaders()
           const response = await fetch(getBackendAPIURL('/api/photos/queue-status-stream'), {
-            credentials: 'include',
+            headers: {
+              ...authHeaders,
+            },
           })
 
           if (!response.ok) {
@@ -191,12 +194,13 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
         abortControllerRef.current?.abort()
       }, REQUEST_TIMEOUT)
 
+      const authHeaders = await getAuthHeaders()
       const response = await fetch(getBackendAPIURL('/api/photos/process-queue-worker'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
-        credentials: 'include',
         signal: abortControllerRef.current.signal,
       })
 
