@@ -91,8 +91,9 @@ export async function POST(request: NextRequest) {
         let allPhotos: any[]
 
         // Layer 1: Embedding similarity search
-        // Get more candidates for vision layer to filter (configurable via env)
-        const LAYER1_PHOTO_LIMIT = parseInt(process.env.LAYER1_PHOTO_LIMIT || "100", 10)
+        // No artificial limit - return all photos above MIN_CLIP_SCORE threshold
+        // Vision Layer 4 will be the final filter (configurable via LAYER1_PHOTO_LIMIT if needed)
+        const LAYER1_PHOTO_LIMIT = parseInt(process.env.LAYER1_PHOTO_LIMIT || "1000", 10)
 
         if (query) {
           // CLIP text-to-image search
