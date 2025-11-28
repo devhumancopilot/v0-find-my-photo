@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { getBackendAPIURL } from "@/lib/config"
 import {
   Dialog,
   DialogContent,
@@ -83,7 +84,9 @@ export function PrintOrderDialog({
   const loadProducts = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/gelato/products")
+      const response = await fetch(getBackendAPIURL("/api/gelato/products"), {
+        credentials: "include"
+      })
       const data = await response.json()
 
       if (!response.ok) {
@@ -114,9 +117,10 @@ export function PrintOrderDialog({
       setQuoteLoading(true)
       setError("")
 
-      const response = await fetch("/api/gelato/quote", {
+      const response = await fetch(getBackendAPIURL("/api/gelato/quote"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           productUid: selectedProduct,
           pageCount,
@@ -150,9 +154,10 @@ export function PrintOrderDialog({
       setGeneratingPDF(true)
 
       // Step 1: Generate PDF from album
-      const pdfResponse = await fetch("/api/gelato/generate-pdf", {
+      const pdfResponse = await fetch(getBackendAPIURL("/api/gelato/generate-pdf"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           albumId,
           layoutTemplate,
@@ -169,9 +174,10 @@ export function PrintOrderDialog({
       setGeneratingPDF(false)
 
       // Step 2: Place order with Gelato
-      const response = await fetch("/api/gelato/order", {
+      const response = await fetch(getBackendAPIURL("/api/gelato/order"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           albumId,
           productUid: selectedProduct,

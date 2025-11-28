@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { getBackendAPIURL } from "@/lib/config"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Users, UserCircle, Edit2, Loader2 } from "lucide-react"
 import {
@@ -46,7 +47,9 @@ export function FaceProfilesSection() {
   const fetchFaceProfiles = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/face-profiles")
+      const response = await fetch(getBackendAPIURL("/api/face-profiles"), {
+        credentials: "include"
+      })
       if (!response.ok) {
         throw new Error("Failed to fetch face profiles")
       }
@@ -64,9 +67,10 @@ export function FaceProfilesSection() {
 
     try {
       setIsUpdating(true)
-      const response = await fetch("/api/face-profiles/bulk-update", {
+      const response = await fetch(getBackendAPIURL("/api/face-profiles/bulk-update"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           face_ids: selectedProfile.face_ids,
           face_name: newName.trim(),
