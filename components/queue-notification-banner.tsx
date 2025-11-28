@@ -169,7 +169,7 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
         abortControllerRef.current?.abort()
       }, REQUEST_TIMEOUT)
 
-      const response = await fetch('/api/photos/process-queue', {
+      const response = await fetch('/api/photos/process-queue-worker', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,9 +190,9 @@ export function QueueNotificationBanner({ pendingCount, processingCount }: Queue
       setBatchCount(newBatchCount)
       setConsecutiveFailures(0)
 
-      // Note: The API now self-triggers for the next photo automatically
+      // Note: The worker processes all photos in background
       // The SSE connection provides real-time status updates
-      console.log(`[Queue Banner] Initial trigger successful. API will self-trigger automatically.`)
+      console.log(`[Queue Banner] Worker triggered successfully. Processing in background...`)
 
       // The SSE stream will detect when processing is complete
       // (see the useEffect that monitors currentPendingCount and currentProcessingCount)
