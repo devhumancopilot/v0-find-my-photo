@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sparkles, Plus, Settings, ArrowLeft, FolderOpen } from "lucide-react"
 import { LogoutButton } from "@/components/logout-button"
-import { AlbumCard } from "@/components/album-card"
+import { AlbumsWithBulkDelete } from "@/components/albums-with-bulk-delete"
 
 export default async function AlbumsPage() {
   const supabase = await createClient()
@@ -133,33 +133,9 @@ export default async function AlbumsPage() {
           </Link>
         </div>
 
-        {/* Albums Collage */}
+        {/* Albums Display */}
         {albums.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 auto-rows-[200px] gap-4">
-            {albums.map((album, index) => {
-              // Create a dynamic pattern with medium minimum size (2×2 minimum)
-              const pattern = index % 5
-              const getGridClass = () => {
-                switch (pattern) {
-                  case 0: return 'col-span-3 row-span-3' // Extra large
-                  case 1: return 'col-span-2 row-span-2' // Medium square
-                  case 2: return 'col-span-2 row-span-3' // Large tall
-                  case 3: return 'col-span-2 row-span-2' // Medium square
-                  case 4: return 'col-span-3 row-span-2' // Large wide
-                  default: return 'col-span-2 row-span-2'
-                }
-              }
-
-              return (
-                <div
-                  key={album.id}
-                  className={`${getGridClass()} overflow-hidden`}
-                >
-                  <AlbumCard album={album} />
-                </div>
-              )
-            })}
-          </div>
+          <AlbumsWithBulkDelete albums={albums} />
         ) : (
           <Card className="border-white/20 bg-white/60 backdrop-blur-sm">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">

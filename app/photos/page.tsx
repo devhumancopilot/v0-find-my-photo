@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sparkles, Settings, Upload, ArrowLeft, ImageIcon } from "lucide-react"
 import { LogoutButton } from "@/components/logout-button"
-import { PhotoGallery } from "@/components/photo-gallery"
+import { PhotosWithBulkDelete } from "@/components/photos-with-bulk-delete"
 
 export default async function PhotosPage() {
   const supabase = await createClient()
@@ -120,9 +120,7 @@ export default async function PhotosPage() {
         )}
 
         {!photosError && photoCount > 0 && (
-          <div className="rounded-lg border border-white/20 bg-white/60 p-6 backdrop-blur-sm">
-            <PhotoGallery photos={photos || []} />
-          </div>
+          <PhotosWithBulkDelete photos={photos || []} />
         )}
 
         {!photosError && photoCount === 0 && (
