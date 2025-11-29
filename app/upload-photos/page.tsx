@@ -460,7 +460,7 @@ export default function UploadPhotosPage() {
                     Import from Google Photos
                   </CardTitle>
                   <CardDescription>
-                    Connect and select photos
+                    Select photos to upload (previews show filenames only)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -535,23 +535,22 @@ export default function UploadPhotosPage() {
 
                     {/* Google Photos Preview Images */}
                     {googlePhotos.map((photo) => (
-                      <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg bg-muted/20">
-                        {photo.baseUrl ? (
-                          <img
-                            src={getBackendAPIURL(`/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=w400-h400`)}
-                            alt={photo.filename || "Google Photo"}
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              console.error('Failed to load Google Photo via proxy:', photo.id, photo.baseUrl);
-                              // Show error placeholder
-                              e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23ddd" width="400" height="400"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="16" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3ELoading Error%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-muted/40">
-                            <p className="text-xs text-muted-foreground">No preview</p>
+                      <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200">
+                        <div className="flex h-full w-full flex-col items-center justify-center p-4">
+                          {/* Google Photos Icon */}
+                          <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500 text-white">
+                            <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
+                            </svg>
                           </div>
-                        )}
+                          {/* Filename */}
+                          <p className="text-center text-xs font-medium text-blue-900 line-clamp-2">
+                            {photo.filename || `Photo ${photo.id.substring(0, 8)}`}
+                          </p>
+                          <p className="mt-1 text-center text-xs text-blue-600">
+                            From Google Photos
+                          </p>
+                        </div>
                         {!isUploading && (
                           <button
                             onClick={() => removeGooglePhoto(photo.id)}
