@@ -31,7 +31,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Redirect unauthenticated users to sign-in for protected routes
-  const protectedPaths = ["/dashboard", "/onboarding", "/create-album", "/upload-photos"]
+  const protectedPaths = ["/dashboard", "/create-album", "/upload-photos"]
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
 
   if (isProtectedPath && !user) {
