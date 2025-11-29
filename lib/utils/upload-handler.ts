@@ -145,13 +145,18 @@ export async function uploadPhotosWithFormData(
         // Manual upload
         formData.append('photos', item);
       } else {
-        // Google Photos - need to fetch and add as Blob
+        // Google Photos - need to fetch and add as Blob with authentication
         try {
+          const authHeaders = await getAuthHeaders();
           const proxyUrl = getBackendAPIURL(`/api/google-photos/proxy-image?url=${encodeURIComponent(item.baseUrl)}&size=d`);
-          const imageResponse = await fetch(proxyUrl);
+          const imageResponse = await fetch(proxyUrl, {
+            headers: {
+              ...authHeaders,
+            },
+          });
 
           if (!imageResponse.ok) {
-            console.error(`[FormData Upload] Failed to fetch Google Photo ${item.id}`);
+            console.error(`[FormData Upload] Failed to fetch Google Photo ${item.id}:`, imageResponse.status, imageResponse.statusText);
             totalFailed++;
             continue;
           }
