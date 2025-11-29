@@ -1,6 +1,9 @@
 "use client"
 
 import { createClient } from "@/lib/supabase/client"
+
+// Force dynamic rendering to avoid build-time Supabase client creation
+export const dynamic = 'force-dynamic'
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
