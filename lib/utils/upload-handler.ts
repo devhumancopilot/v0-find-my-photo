@@ -147,7 +147,7 @@ export async function uploadPhotosWithFormData(
       } else {
         // Google Photos - need to fetch and add as Blob
         try {
-          const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(item.baseUrl)}&size=d`;
+          const proxyUrl = getBackendAPIURL(`/api/google-photos/proxy-image?url=${encodeURIComponent(item.baseUrl)}&size=d`);
           const imageResponse = await fetch(proxyUrl);
 
           if (!imageResponse.ok) {

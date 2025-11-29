@@ -11,6 +11,7 @@ import { Sparkles, Upload, X, ImageIcon, Check, ArrowLeft, Image as ImageIconLuc
 import { GooglePhotosPicker } from "@/components/google-photos-picker"
 import { toast } from "sonner"
 import { uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
+import { getBackendAPIURL } from "@/lib/config"
 
 interface UploadedImage {
   id: string
@@ -227,7 +228,7 @@ export default function UploadPhotosPage() {
       toast.info("Preparing Google Photos...", { duration: 2000 })
       for (const photo of googlePhotos) {
         try {
-          const proxyUrl = `/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`
+          const proxyUrl = getBackendAPIURL(`/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`)
           const imageResponse = await fetch(proxyUrl)
           if (imageResponse.ok) {
             const blob = await imageResponse.blob()
@@ -537,7 +538,7 @@ export default function UploadPhotosPage() {
                       <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg bg-muted/20">
                         {photo.baseUrl ? (
                           <img
-                            src={`/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=w400-h400`}
+                            src={getBackendAPIURL(`/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=w400-h400`)}
                             alt={photo.filename || "Google Photo"}
                             className="h-full w-full object-cover"
                             onError={(e) => {
