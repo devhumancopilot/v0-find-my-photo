@@ -7,8 +7,7 @@ import { Card } from "@/components/ui/card"
 import { ArrowLeft, Printer, Grid3x3, Grid2x2, LayoutGrid, Image as ImageIcon, Package, ZoomIn, ZoomOut, Download, Loader2 } from "lucide-react"
 import { PrintOrderDialog } from "@/components/print-order-dialog"
 import { toast } from "sonner"
-import html2canvas from "html2canvas"
-import jsPDF from "jspdf"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 
 interface Photo {
   id: number
@@ -640,109 +639,47 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
 
     try {
       toast.info('Generating PDF', {
-        description: 'Please wait while we create your high-quality album PDF...',
+        description: 'Please wait while we create your high-quality album PDF with advanced vision rendering...',
       })
 
-      console.log('[PDF] Starting client-side PDF generation...')
+      console.log('[PDF] Starting server-side WYSIWYG PDF generation with Puppeteer...')
 
-      // Get all print-page elements
-      const pageElements = document.querySelectorAll('.print-page')
-
-      if (pageElements.length === 0) {
-        throw new Error('No pages found to convert to PDF')
-      }
-
-      console.log(`[PDF] Found ${pageElements.length} pages to screenshot`)
-
-      // Create PDF with letter size (8.5" x 11" = 612 x 792 points at 72 DPI)
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'letter',
-      })
-
-      // Process each page
-      for (let i = 0; i < pageElements.length; i++) {
-        const pageElement = pageElements[i] as HTMLElement
-
-        console.log(`[PDF] Screenshotting page ${i + 1}/${pageElements.length}...`)
-
-        // Update toast to show progress
-        toast.info('Generating PDF', {
-          description: `Processing page ${i + 1} of ${pageElements.length}...`,
-        })
-
-        // Screenshot the page element
-        const canvas = await html2canvas(pageElement, {
-          scale: 2, // 2x scale for better quality
-          useCORS: true, // Allow cross-origin images
-          logging: false,
-          backgroundColor: '#ffffff',
-          onclone: (clonedDoc) => {
-            // Remove all stylesheets to prevent html2canvas from parsing oklch colors
-            // We'll replace them with inline RGB styles from computed values
-            const stylesheets = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]')
-            stylesheets.forEach(sheet => sheet.remove())
-
-            // Get all elements from the cloned document
-            const clonedElements = clonedDoc.querySelectorAll('*')
-            const originalElements = document.querySelectorAll('.print-page *')
-
-            // Apply computed styles as inline styles (computed styles are always RGB)
-            clonedElements.forEach((clonedEl, index) => {
-              if (clonedEl instanceof HTMLElement && originalElements[index]) {
-                const computed = window.getComputedStyle(originalElements[index])
-
-                // Apply all color-related properties as inline styles
-                clonedEl.style.backgroundColor = computed.backgroundColor
-                clonedEl.style.color = computed.color
-                clonedEl.style.borderColor = computed.borderColor
-                clonedEl.style.borderTopColor = computed.borderTopColor
-                clonedEl.style.borderRightColor = computed.borderRightColor
-                clonedEl.style.borderBottomColor = computed.borderBottomColor
-                clonedEl.style.borderLeftColor = computed.borderLeftColor
-
-                // Apply layout/sizing properties
-                clonedEl.style.display = computed.display
-                clonedEl.style.width = computed.width
-                clonedEl.style.height = computed.height
-                clonedEl.style.margin = computed.margin
-                clonedEl.style.padding = computed.padding
-                clonedEl.style.fontSize = computed.fontSize
-                clonedEl.style.fontWeight = computed.fontWeight
-                clonedEl.style.fontFamily = computed.fontFamily
-                clonedEl.style.lineHeight = computed.lineHeight
-                clonedEl.style.textAlign = computed.textAlign
-              }
-            })
+      // Call backend API to generate PDF using Puppeteer
+      const authHeaders = await getAuthHeaders()
+      const response = await fetch(
+        getBackendAPIURL(`/api/album/${albumId}/generate-pdf`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
           },
-        })
-
-        // Convert canvas to image
-        const imgData = canvas.toDataURL('image/jpeg', 0.95)
-
-        // Calculate dimensions to fit letter size (maintain aspect ratio)
-        const pdfWidth = 612 // Letter width in points
-        const pdfHeight = 792 // Letter height in points
-
-        // Add image to PDF
-        if (i > 0) {
-          pdf.addPage()
+          body: JSON.stringify({
+            layoutTemplate: selectedTemplate,
+          }),
         }
+      )
 
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight)
-
-        console.log(`[PDF] Page ${i + 1} added to PDF`)
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to generate PDF')
       }
 
-      // Save the PDF
-      const fileName = `${albumTitle.replace(/[^a-z0-9]/gi, '_')}_${selectedTemplate}.pdf`
-      pdf.save(fileName)
+      // Download the PDF blob
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${albumTitle.replace(/[^a-z0-9]/gi, '_')}_${selectedTemplate}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
 
       console.log('[PDF] PDF downloaded successfully')
 
       toast.success('PDF Downloaded', {
-        description: 'Your album PDF has been downloaded with full styling!',
+        description: 'Your album PDF has been generated with print-quality rendering!',
       })
     } catch (error) {
       console.error('PDF generation error:', error)
@@ -956,12 +893,12 @@ export default function PrintPreview({ photos, albumTitle, albumId, layoutTempla
               onClick={handleDownloadPDF}
               disabled={isGeneratingPDF}
               variant="default"
-              className="hidden bg-green-600 hover:bg-green-700 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGeneratingPDF ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
+                  Generating PDF...
                 </>
               ) : (
                 <>

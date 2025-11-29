@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import PrintPreview from "./print-preview"
 
 interface PrintPageProps {
@@ -9,6 +10,7 @@ interface PrintPageProps {
   searchParams: Promise<{
     layout?: string
     pdf?: string
+    token?: string // Bearer token for Puppeteer auth
   }>
 }
 
@@ -32,15 +34,36 @@ interface Photo {
 export default async function PrintPage({ params, searchParams }: PrintPageProps) {
   // Await params before using its properties (Next.js 15 requirement)
   const { id } = await params
-  const { layout, pdf } = await searchParams
+  const { layout, pdf, token } = await searchParams
 
-  const supabase = await createClient()
+  // Support both cookie-based auth (normal users) and token-based auth (Puppeteer)
+  let supabase
+  if (token) {
+    // Puppeteer accessing with Bearer token
+    console.log('[Print Page] Using Bearer token authentication for Puppeteer')
+    supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
+  } else {
+    // Normal user accessing with cookies
+    supabase = await createClient()
+  }
+
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
+    console.error('[Print Page] Auth error:', authError)
     redirect("/sign-in")
   }
 
