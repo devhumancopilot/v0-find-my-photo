@@ -11,7 +11,7 @@ import { Sparkles, Upload, X, ImageIcon, Check, ArrowLeft, Image as ImageIconLuc
 import { GooglePhotosPicker } from "@/components/google-photos-picker"
 import { toast } from "sonner"
 import { uploadPhotosWithFormData } from "@/lib/utils/upload-handler"
-import { getBackendAPIURL } from "@/lib/config"
+import { getBackendAPIURL, getAuthHeaders } from "@/lib/config"
 
 interface UploadedImage {
   id: string
@@ -26,6 +26,7 @@ interface GooglePhoto {
   mimeType: string
   filename?: string
   source: 'google_photos'
+  previewUrl?: string // Blob URL for authenticated preview
 }
 
 export default function UploadPhotosPage() {
@@ -113,12 +114,41 @@ export default function UploadPhotosPage() {
     setUploadedImages([...uploadedImages, ...newImages])
   }
 
-  const handleGooglePhotosSelected = useCallback((photos: Array<{ id: string; baseUrl: string; mimeType: string; filename?: string }>) => {
+  const handleGooglePhotosSelected = useCallback(async (photos: Array<{ id: string; baseUrl: string; mimeType: string; filename?: string }>) => {
     const newGooglePhotos = photos.map((photo) => ({
       ...photo,
       source: 'google_photos' as const,
+      previewUrl: undefined, // Will be fetched lazily
     }))
     setGooglePhotos(newGooglePhotos)
+
+    // Fetch preview images with authentication in the background
+    // This uses Bearer token authentication which works across domains
+    const photosWithPreviews = await Promise.all(
+      newGooglePhotos.map(async (photo) => {
+        try {
+          const authHeaders = await getAuthHeaders()
+          const proxyUrl = getBackendAPIURL(`/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=w400-h400`)
+
+          const response = await fetch(proxyUrl, {
+            headers: {
+              ...authHeaders,
+            },
+          })
+
+          if (response.ok) {
+            const blob = await response.blob()
+            const blobUrl = URL.createObjectURL(blob)
+            return { ...photo, previewUrl: blobUrl }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch preview for ${photo.id}:`, error)
+        }
+        return photo
+      })
+    )
+
+    setGooglePhotos(photosWithPreviews)
   }, [])
 
   // Drag and drop handlers
@@ -212,6 +242,11 @@ export default function UploadPhotosPage() {
   }
 
   const removeGooglePhoto = (id: string) => {
+    // Clean up blob URL if it exists
+    const photo = googlePhotos.find((p) => p.id === id)
+    if (photo?.previewUrl) {
+      URL.revokeObjectURL(photo.previewUrl)
+    }
     setGooglePhotos(googlePhotos.filter((photo) => photo.id !== id))
   }
 
@@ -220,27 +255,12 @@ export default function UploadPhotosPage() {
   const handleUpload = async () => {
     if (totalPhotos === 0) return
 
-    // Prepare all files
-    const allFiles: File[] = uploadedImages.map(img => img.file)
+    // Prepare manual upload files only
+    const manualFiles: File[] = uploadedImages.map(img => img.file)
 
-    // Fetch Google Photos and convert to Files for upload
-    if (googlePhotos.length > 0) {
-      toast.info("Preparing Google Photos...", { duration: 2000 })
-      for (const photo of googlePhotos) {
-        try {
-          const proxyUrl = getBackendAPIURL(`/api/google-photos/proxy-image?url=${encodeURIComponent(photo.baseUrl)}&size=d`)
-          const imageResponse = await fetch(proxyUrl)
-          if (imageResponse.ok) {
-            const blob = await imageResponse.blob()
-            const filename = photo.filename || `google-photo-${photo.id}.jpg`
-            const file = new File([blob], filename, { type: photo.mimeType || 'image/jpeg' })
-            allFiles.push(file)
-          }
-        } catch (error) {
-          console.error(`Failed to fetch Google Photo ${photo.id}:`, error)
-        }
-      }
-    }
+    // Don't pre-fetch Google Photos - let upload-handler do lazy loading in batches
+    // This prevents loading all photos into browser memory at once
+    // upload-handler.ts will fetch Google Photos on-demand in batches of 10
 
     // Use backend API upload for all batch sizes (goes through separated backend server)
     setIsUploading(true)
@@ -250,11 +270,13 @@ export default function UploadPhotosPage() {
 
     try {
       // Use backend API upload for ALL uploads (goes through separated backend server)
-      console.log(`[Upload] Using backend API upload via /api/photos/upload for ${allFiles.length} photos`)
+      console.log(`[Upload] Using backend API upload via /api/photos/upload for ${manualFiles.length} manual + ${googlePhotos.length} Google Photos`)
 
+      // Pass googlePhotos metadata - upload-handler will fetch them lazily in batches
+      // This is memory efficient: only 10 photos (~50MB) in memory at a time instead of all at once
       const result = await uploadPhotosWithFormData(
-        allFiles,
-        googlePhotos,
+        manualFiles,
+        googlePhotos, // Pass metadata array - upload-handler fetches lazily
         (current, total, progress) => {
           setCurrentUploadingPhoto(current)
           setUploadProgress(progress)
@@ -264,6 +286,11 @@ export default function UploadPhotosPage() {
       // Clean up object URLs
       uploadedImages.forEach((image) => {
         URL.revokeObjectURL(image.preview)
+      })
+      googlePhotos.forEach((photo) => {
+        if (photo.previewUrl) {
+          URL.revokeObjectURL(photo.previewUrl)
+        }
       })
 
       // Clear session storage
@@ -498,6 +525,11 @@ export default function UploadPhotosPage() {
                         size="sm"
                         onClick={() => {
                           uploadedImages.forEach((img) => URL.revokeObjectURL(img.preview))
+                          googlePhotos.forEach((photo) => {
+                            if (photo.previewUrl) {
+                              URL.revokeObjectURL(photo.previewUrl)
+                            }
+                          })
                           setUploadedImages([])
                           setGooglePhotos([])
                           sessionStorage.removeItem('pendingUploadCount')
@@ -535,22 +567,30 @@ export default function UploadPhotosPage() {
 
                     {/* Google Photos Preview Images */}
                     {googlePhotos.map((photo) => (
-                      <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200">
-                        <div className="flex h-full w-full flex-col items-center justify-center p-4">
-                          {/* Google Photos Icon */}
-                          <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500 text-white">
-                            <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
-                            </svg>
+                      <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg">
+                        {photo.previewUrl ? (
+                          // Show actual image preview using authenticated blob URL
+                          <img
+                            src={photo.previewUrl}
+                            alt={photo.filename || 'Google Photo'}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          // Loading state - show placeholder while fetching
+                          <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 p-4">
+                            <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500 text-white">
+                              <svg className="h-8 w-8 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
+                              </svg>
+                            </div>
+                            <p className="text-center text-xs font-medium text-blue-900 line-clamp-2">
+                              {photo.filename || `Photo ${photo.id.substring(0, 8)}`}
+                            </p>
+                            <p className="mt-1 text-center text-xs text-blue-600">
+                              Loading preview...
+                            </p>
                           </div>
-                          {/* Filename */}
-                          <p className="text-center text-xs font-medium text-blue-900 line-clamp-2">
-                            {photo.filename || `Photo ${photo.id.substring(0, 8)}`}
-                          </p>
-                          <p className="mt-1 text-center text-xs text-blue-600">
-                            From Google Photos
-                          </p>
-                        </div>
+                        )}
                         {!isUploading && (
                           <button
                             onClick={() => removeGooglePhoto(photo.id)}
