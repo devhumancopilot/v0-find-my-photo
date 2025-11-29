@@ -129,7 +129,15 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
         }
 
         try {
-          const pollResponse = await fetch(`/api/google-photos/poll-session/${session.id}`);
+          const authHeaders = await getAuthHeaders();
+          const pollResponse = await fetch(
+            getBackendAPIURL(`/api/google-photos/poll-session/${session.id}`),
+            {
+              headers: {
+                ...authHeaders,
+              },
+            }
+          );
 
           if (!pollResponse.ok) {
             throw new Error('Failed to poll session status');
@@ -184,7 +192,15 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
         ...(pageToken && { pageToken }),
       });
 
-      const response = await fetch(`/api/google-photos/media-items?${params.toString()}`);
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(
+        getBackendAPIURL(`/api/google-photos/media-items?${params.toString()}`),
+        {
+          headers: {
+            ...authHeaders,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to retrieve selected photos');
