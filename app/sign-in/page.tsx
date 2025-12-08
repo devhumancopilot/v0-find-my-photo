@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sparkles } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -46,50 +47,16 @@ export default function SignInPage() {
     }
   }
 
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
-      })
-
-      if (error) throw error
-    } catch (err) {
-      console.error("[v0] Google sign in error:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign in with Google")
-      setIsLoading(false)
-    }
+  const handleGoogleSignIn = () => {
+    toast.info("Coming Soon", {
+      description: "Google sign-in will be available soon!",
+    })
   }
 
-  const handleAppleSignIn = async () => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "apple",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (error) throw error
-    } catch (err) {
-      console.error("[v0] Apple sign in error:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign in with Apple")
-      setIsLoading(false)
-    }
+  const handleAppleSignIn = () => {
+    toast.info("Coming Soon", {
+      description: "Apple sign-in will be available soon!",
+    })
   }
 
   return (
